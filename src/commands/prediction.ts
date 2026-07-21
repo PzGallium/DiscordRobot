@@ -1,19 +1,16 @@
 import {
-  ChannelType,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
-  type TextChannel,
 } from 'discord.js';
 import { EconomyError } from '../services/economy.js';
+import { listOpenPredictions } from '../services/prediction.js';
 import {
-  createPrediction,
-  getPrediction,
-  listOpenPredictions,
-  setPredictionMessage,
-  settlePrediction,
-} from '../services/prediction.js';
-import { buildPredictionButtons, buildPredictionEmbed } from '../ui/predictionPanel.js';
-import { formatCoins } from '../utils/format.js';
+  buildCreatePredictionModal,
+  DURATION_PRESET_CHOICES,
+  type DurationPresetValue,
+  type PredictionOptionTemplate,
+} from '../ui/predictionCreateModal.js';
+import { buildSettlePredictionModal } from '../ui/predictionSettleModal.js';
 import { isGuildAdmin } from '../utils/permissions.js';
 
 export const data = new SlashCommandBuilder()
@@ -23,30 +20,28 @@ export const data = new SlashCommandBuilder()
     sub
       .setName('create')
       .setDescription('创建竞猜并发布面板（管理员）')
-      .addStringOption((opt) => opt.setName('title').setDescription('标题').setRequired(true))
       .addStringOption((opt) =>
         opt
-          .setName('deadline')
-          .setDescription('截止时间 ISO，例如 2026-07-21T21:00:00')
-          .setRequired(true),
+          .setName('duration')
+          .setDescription('提交后多久截止下注')
+          .setRequired(true)
+          .addChoices(...DURATION_PRESET_CHOICES),
       )
       .addStringOption((opt) =>
         opt
-          .setName('options')
-          .setDescription('选项，逗号分隔（默认 YES,NO）')
-          .setRequired(false),
+          .setName('template')
+          .setDescription('选项模板')
+          .setRequired(false)
+          .addChoices(
+            { name: 'YES / NO（默认）', value: 'yesno' },
+            { name: 'A / B / C / D', value: 'abcd' },
+            { name: 'A / B / C', value: 'abc' },
+            { name: '自定义多选项', value: 'custom' },
+          ),
       ),
   )
   .addSubcommand((sub) =>
-    sub
-      .setName('settle')
-      .setDescription('开奖（管理员）')
-      .addIntegerOption((opt) =>
-        opt.setName('id').setDescription('竞猜 ID').setRequired(true),
-      )
-      .addStringOption((opt) =>
-        opt.setName('winner').setDescription('获胜选项（须完全匹配）').setRequired(true),
-      ),
+    sub.setName('settle').setDescription('开奖结算（管理员）'),
   )
   .addSubcommand((sub) =>
     sub.setName('list').setDescription('列出进行中的竞猜'),
@@ -86,95 +81,21 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   try {
     if (sub === 'create') {
-      const title = interaction.options.getString('title', true);
-      const deadlineRaw = interaction.options.getString('deadline', true);
-      const optionsRaw = interaction.options.getString('options') ?? 'YES,NO';
-      const options = optionsRaw
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-      const deadline = new Date(deadlineRaw);
-      if (Number.isNaN(deadline.getTime())) {
-        await interaction.reply({
-          content: '截止时间格式无效，请用 ISO，例如 `2026-07-21T21:00:00`',
-          ephemeral: true,
-        });
-        return;
-      }
-
-      if (interaction.channel.type !== ChannelType.GuildText && interaction.channel.type !== ChannelType.GuildAnnouncement) {
-        await interaction.reply({ content: '请在文字频道中创建。', ephemeral: true });
-        return;
-      }
-
-      const prediction = createPrediction({
-        guildId: interaction.guildId,
-        title,
-        options,
-        deadline,
-        createdBy: interaction.user.id,
-        channelId: interaction.channel.id,
-      });
-
-      const channel = interaction.channel as TextChannel;
-      const message = await channel.send({
-        embeds: [buildPredictionEmbed(prediction)],
-        components: buildPredictionButtons(prediction),
-      });
-
-      setPredictionMessage(prediction.id, message.id);
-
-      await interaction.reply({
-        content: `竞猜 #${prediction.id} 已发布。成员点击按钮并输入金额即可下注。`,
-        ephemeral: true,
-      });
+      const duration = interaction.options.getString('duration', true) as DurationPresetValue;
+      const template = (interaction.options.getString('template') ??
+        'yesno') as PredictionOptionTemplate;
+      await interaction.showModal(buildCreatePredictionModal(template, duration));
       return;
     }
 
     if (sub === 'settle') {
-      const id = interaction.options.getInteger('id', true);
-      const winner = interaction.options.getString('winner', true).trim();
-      const before = getPrediction(id);
-      if (!before || before.guild_id !== interaction.guildId) {
-        await interaction.reply({ content: '找不到该竞猜。', ephemeral: true });
+      const list = listOpenPredictions(interaction.guildId);
+      if (list.length === 0) {
+        await interaction.reply({ content: '当前没有可结算的竞猜。', ephemeral: true });
         return;
       }
 
-      const result = settlePrediction(id, winner);
-      const refreshed = getPrediction(id)!;
-
-      if (refreshed.channel_id && refreshed.message_id) {
-        try {
-          const channel = await interaction.client.channels.fetch(refreshed.channel_id);
-          if (channel && channel.isTextBased() && 'messages' in channel) {
-            const msg = await channel.messages.fetch(refreshed.message_id);
-            await msg.edit({
-              embeds: [buildPredictionEmbed(refreshed)],
-              components: [],
-            });
-          }
-        } catch {
-          // panel update best-effort
-        }
-      }
-
-      const winnerLines =
-        result.winners.length === 0
-          ? '无人押中，奖池全部销毁。'
-          : result.winners
-              .slice(0, 15)
-              .map((w) => `<@${w.discordId}> 押 ${w.bet} → 得 ${formatCoins(w.payout)}`)
-              .join('\n');
-
-      await interaction.reply({
-        content: [
-          `开奖完成：#${id} → **${result.winnerOption}**`,
-          `奖池 ${formatCoins(result.pool)} · 销毁 ${formatCoins(result.fee)} · 派发 ${formatCoins(result.distributable)}`,
-          winnerLines,
-        ].join('\n'),
-      });
-      return;
+      await interaction.showModal(buildSettlePredictionModal(list[0]!));
     }
   } catch (err) {
     const message = err instanceof EconomyError ? err.message : '操作失败';

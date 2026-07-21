@@ -189,13 +189,24 @@ export function placeBet(input: {
   });
 }
 
+export type SettleParticipant = {
+  userId: number;
+  discordId: string;
+  nickname: string;
+  option: string;
+  bet: number;
+  payout: number;
+};
+
 export type SettleResult = {
   prediction: PredictionRow;
   pool: number;
   fee: number;
   distributable: number;
   winnerOption: string;
-  winners: Array<{ userId: number; discordId: string; bet: number; payout: number }>;
+  optionTotals: Record<string, number>;
+  winners: SettleParticipant[];
+  losers: SettleParticipant[];
 };
 
 export function settlePrediction(predictionId: number, winnerOption: string): SettleResult {
@@ -216,13 +227,21 @@ export function settlePrediction(predictionId: number, winnerOption: string): Se
       .prepare(`SELECT * FROM bets WHERE prediction_id = ?`)
       .all(predictionId) as BetRow[];
 
+    const optionTotals: Record<string, number> = {};
+    for (const opt of options) optionTotals[opt] = 0;
+    for (const bet of bets) {
+      optionTotals[bet.option] = (optionTotals[bet.option] ?? 0) + bet.amount;
+    }
+
     const pool = bets.reduce((sum, b) => sum + b.amount, 0);
     const fee = Math.floor((pool * prediction.fee_bps) / 10000);
     const distributable = pool - fee;
     const winningBets = bets.filter((b) => b.option === winnerOption);
+    const losingBets = bets.filter((b) => b.option !== winnerOption);
     const winningTotal = winningBets.reduce((sum, b) => sum + b.amount, 0);
 
-    const winners: SettleResult['winners'] = [];
+    const winners: SettleParticipant[] = [];
+    const losers: SettleParticipant[] = [];
     let paid = 0;
 
     if (winningTotal > 0 && distributable > 0) {
@@ -248,10 +267,38 @@ export function settlePrediction(predictionId: number, winnerOption: string): Se
         winners.push({
           userId: user.id,
           discordId: user.discord_id,
+          nickname: user.nickname,
+          option: bet.option,
           bet: bet.amount,
           payout,
         });
       }
+    } else {
+      for (const bet of winningBets) {
+        const user = getUserById(bet.user_id);
+        if (!user) continue;
+        winners.push({
+          userId: user.id,
+          discordId: user.discord_id,
+          nickname: user.nickname,
+          option: bet.option,
+          bet: bet.amount,
+          payout: 0,
+        });
+      }
+    }
+
+    for (const bet of losingBets) {
+      const user = getUserById(bet.user_id);
+      if (!user) continue;
+      losers.push({
+        userId: user.id,
+        discordId: user.discord_id,
+        nickname: user.nickname,
+        option: bet.option,
+        bet: bet.amount,
+        payout: 0,
+      });
     }
 
     // fee + rounding dust (and entire pool when nobody won)
@@ -281,7 +328,9 @@ export function settlePrediction(predictionId: number, winnerOption: string): Se
       fee: burnTotal,
       distributable: paid,
       winnerOption,
+      optionTotals,
       winners,
+      losers,
     };
   });
 }

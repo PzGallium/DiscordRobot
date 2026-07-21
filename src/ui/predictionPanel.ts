@@ -58,6 +58,13 @@ export function buildPredictionEmbed(prediction: PredictionRow): EmbedBuilder {
 export function buildPredictionButtons(prediction: PredictionRow): ActionRowBuilder<ButtonBuilder>[] {
   const options = parseOptions(prediction.options_json);
   const disabled = prediction.status !== 'open';
+  const styles = [
+    ButtonStyle.Success,
+    ButtonStyle.Danger,
+    ButtonStyle.Primary,
+    ButtonStyle.Secondary,
+    ButtonStyle.Secondary,
+  ];
 
   const row = new ActionRowBuilder<ButtonBuilder>();
   for (let i = 0; i < options.length; i++) {
@@ -65,8 +72,8 @@ export function buildPredictionButtons(prediction: PredictionRow): ActionRowBuil
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`bet:${prediction.id}:${i}`)
-        .setLabel(opt)
-        .setStyle(i === 0 ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setLabel(opt.slice(0, 80))
+        .setStyle(styles[i] ?? ButtonStyle.Secondary)
         .setDisabled(disabled),
     );
   }

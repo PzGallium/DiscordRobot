@@ -56,8 +56,8 @@ npm start
 | `/balance` | 全员 | 查询余额 |
 | `/leaderboard` | 全员 | Top 10 |
 | `/transfer` | 全员 | 转账（收款人点 Accept/Reject） |
-| `/prediction create` | 管理员 | 创建竞猜并发布可点击面板 |
-| `/prediction settle` | 管理员 | 开奖 |
+| `/prediction create` | 管理员 | 下拉选截止时长，再填标题/选项发布面板 |
+| `/prediction settle` | 管理员 | 弹出表单开奖（预填最近一场，改获胜选项即可） |
 | `/prediction list` | 全员 | 列出进行中竞猜 |
 | `/redpacket` | 管理员 | 发红包 |
 | `/admin addmoney` | 管理员 | 测试加减余额 |
@@ -66,10 +66,10 @@ npm start
 
 ## 竞猜怎么玩
 
-1. 管理员 `/prediction create` → 频道出现竞猜面板
-2. 成员点击选项按钮（YES / NO 等）
-3. 在弹窗里输入金额 → 提交即下单
-4. 面板自动刷新奖池；截止后按钮禁用；管理员开奖后自动分账
+1. 管理员 `/prediction create`，先选截止时长下拉（1m / 5m / 10m / 1h / 2h / 5h / 12h / 24h / 自定义），可选模板 YES/NO 或 A/B/C/D
+2. 弹出表单填写标题与选项；若选「自定义」时长，再填天/小时/分钟
+3. 提交后频道出现竞猜面板；成员点击选项按钮 → 输入金额下注
+4. 面板自动刷新奖池；截止后按钮禁用；管理员 `/prediction settle` 开奖分账
 
 ## 经济参数（默认）
 
