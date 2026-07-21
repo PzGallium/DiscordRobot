@@ -1,0 +1,31 @@
+{
+  "name": "pz-coin-bot",
+  "version": "1.0.0",
+  "description": "Pz Coin — Discord community economy bot MVP",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "register-commands": "tsx src/register-commands.ts",
+    "migrate": "tsx src/migrate.ts",
+    "smoke": "tsx src/smoke-test.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": ["discord", "bot", "economy"],
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "discord.js": "^14.18.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
