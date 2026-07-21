@@ -40,9 +40,9 @@ export function buildSettlePredictionModal(prediction: PredictionRow): ModalBuil
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
           .setCustomId('winner')
-          .setLabel(`获胜选项（填其一：${optionHint}）`.slice(0, 45))
+          .setLabel('获胜选项，或填「退款」取消'.slice(0, 45))
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder(options[0] ?? 'YES')
+          .setPlaceholder(`${optionHint} / 退款`)
           .setValue(options[0] ?? '')
           .setRequired(true)
           .setMaxLength(40),

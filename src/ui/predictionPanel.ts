@@ -29,12 +29,18 @@ export function buildPredictionEmbed(prediction: PredictionRow): EmbedBuilder {
     statusLabel = '已截止';
     color = 0xfee75c;
   } else if (prediction.status === 'settled') {
-    statusLabel = `已开奖 · 胜出：${prediction.winner_option}`;
-    color = 0x5865f2;
+    if (prediction.winner_option === 'CANCELLED') {
+      statusLabel = '已取消 · 全额退款';
+      color = 0x99aab5;
+    } else {
+      statusLabel = `已开奖 · 胜出：${prediction.winner_option}`;
+      color = 0x5865f2;
+    }
   }
 
+  const optionEmojis = ['🟢', '🔴', '🔵', '🟣', '🟡'];
   const optionLines = options
-    .map((opt) => `**${opt}**：${formatCoins(totals[opt] ?? 0)}`)
+    .map((opt, i) => `${optionEmojis[i] ?? '⚪'} **${opt}**：${formatCoins(totals[opt] ?? 0)}`)
     .join('\n');
 
   const embed = new EmbedBuilder()
@@ -45,7 +51,6 @@ export function buildPredictionEmbed(prediction: PredictionRow): EmbedBuilder {
         `状态：**${statusLabel}**`,
         `截止：${discordTimestamp(deadline, 'F')}（${discordTimestamp(deadline, 'R')}）`,
         `奖池：**${formatCoins(pool)}**`,
-        `手续费：${(prediction.fee_bps / 100).toFixed(1)}%（开奖时销毁）`,
         '',
         optionLines,
       ].join('\n'),
@@ -58,13 +63,7 @@ export function buildPredictionEmbed(prediction: PredictionRow): EmbedBuilder {
 export function buildPredictionButtons(prediction: PredictionRow): ActionRowBuilder<ButtonBuilder>[] {
   const options = parseOptions(prediction.options_json);
   const disabled = prediction.status !== 'open';
-  const styles = [
-    ButtonStyle.Success,
-    ButtonStyle.Danger,
-    ButtonStyle.Primary,
-    ButtonStyle.Secondary,
-    ButtonStyle.Secondary,
-  ];
+  const emojis = ['🟢', '🔴', '🔵', '🟣', '🟡'];
 
   const row = new ActionRowBuilder<ButtonBuilder>();
   for (let i = 0; i < options.length; i++) {
@@ -73,7 +72,8 @@ export function buildPredictionButtons(prediction: PredictionRow): ActionRowBuil
       new ButtonBuilder()
         .setCustomId(`bet:${prediction.id}:${i}`)
         .setLabel(opt.slice(0, 80))
-        .setStyle(styles[i] ?? ButtonStyle.Secondary)
+        .setEmoji(emojis[i] ?? '⚪')
+        .setStyle(ButtonStyle.Secondary)
         .setDisabled(disabled),
     );
   }

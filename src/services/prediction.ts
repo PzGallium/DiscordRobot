@@ -189,6 +189,22 @@ export function placeBet(input: {
   });
 }
 
+export const PREDICTION_CANCEL_KEYWORDS = new Set([
+  'CANCEL',
+  'cancel',
+  'VOID',
+  'void',
+  '退款',
+  '取消',
+  '无人猜中',
+]);
+
+export const PREDICTION_CANCELLED_MARKER = 'CANCELLED';
+
+export function isCancelSettleInput(raw: string): boolean {
+  return PREDICTION_CANCEL_KEYWORDS.has(raw.trim());
+}
+
 export type SettleParticipant = {
   userId: number;
   discordId: string;
@@ -207,9 +223,54 @@ export type SettleResult = {
   optionTotals: Record<string, number>;
   winners: SettleParticipant[];
   losers: SettleParticipant[];
+  /** payout = normal settle; refund = void / nobody hit → all coins returned */
+  mode: 'payout' | 'refund';
 };
 
-export function settlePrediction(predictionId: number, winnerOption: string): SettleResult {
+function buildOptionTotals(options: string[], bets: BetRow[]): Record<string, number> {
+  const optionTotals: Record<string, number> = {};
+  for (const opt of options) optionTotals[opt] = 0;
+  for (const bet of bets) {
+    optionTotals[bet.option] = (optionTotals[bet.option] ?? 0) + bet.amount;
+  }
+  return optionTotals;
+}
+
+function refundAllBets(input: {
+  db: ReturnType<typeof getDb>;
+  guildId: string;
+  predictionId: number;
+  bets: BetRow[];
+}): SettleParticipant[] {
+  const refunded: SettleParticipant[] = [];
+  for (const bet of input.bets) {
+    const user = getUserById(bet.user_id);
+    if (!user) continue;
+
+    applyDelta({
+      db: input.db,
+      guildId: input.guildId,
+      userId: user.id,
+      delta: bet.amount,
+      type: 'bet_refund',
+      refType: 'prediction',
+      refId: input.predictionId,
+      description: `Refund ${bet.amount} on cancelled #${input.predictionId}`,
+    });
+
+    refunded.push({
+      userId: user.id,
+      discordId: user.discord_id,
+      nickname: user.nickname,
+      option: bet.option,
+      bet: bet.amount,
+      payout: bet.amount,
+    });
+  }
+  return refunded;
+}
+
+export function settlePrediction(predictionId: number, winnerOptionRaw: string): SettleResult {
   return withTransaction((db) => {
     const prediction = db
       .prepare(`SELECT * FROM predictions WHERE id = ?`)
@@ -219,73 +280,107 @@ export function settlePrediction(predictionId: number, winnerOption: string): Se
     if (prediction.status === 'settled') throw new EconomyError('Already settled');
 
     const options = parseOptions(prediction.options_json);
-    if (!options.includes(winnerOption)) {
-      throw new EconomyError('Invalid winner option');
-    }
-
     const bets = db
       .prepare(`SELECT * FROM bets WHERE prediction_id = ?`)
       .all(predictionId) as BetRow[];
+    const optionTotals = buildOptionTotals(options, bets);
+    const pool = bets.reduce((sum, b) => sum + b.amount, 0);
 
-    const optionTotals: Record<string, number> = {};
-    for (const opt of options) optionTotals[opt] = 0;
-    for (const bet of bets) {
-      optionTotals[bet.option] = (optionTotals[bet.option] ?? 0) + bet.amount;
+    // Explicit cancel / void → full refund
+    if (isCancelSettleInput(winnerOptionRaw)) {
+      const refunded = refundAllBets({
+        db,
+        guildId: prediction.guild_id,
+        predictionId: prediction.id,
+        bets,
+      });
+
+      db.prepare(
+        `UPDATE predictions SET status = 'settled', winner_option = ? WHERE id = ?`,
+      ).run(PREDICTION_CANCELLED_MARKER, prediction.id);
+
+      return {
+        prediction: getPrediction(prediction.id)!,
+        pool,
+        fee: 0,
+        distributable: pool,
+        winnerOption: PREDICTION_CANCELLED_MARKER,
+        optionTotals,
+        winners: refunded,
+        losers: [],
+        mode: 'refund',
+      };
     }
 
-    const pool = bets.reduce((sum, b) => sum + b.amount, 0);
+    if (!options.includes(winnerOptionRaw)) {
+      throw new EconomyError(
+        `无效获胜选项。请填写：${options.join(' / ')}，或填「退款」取消并全额退回`,
+      );
+    }
+
     const fee = Math.floor((pool * prediction.fee_bps) / 10000);
     const distributable = pool - fee;
-    const winningBets = bets.filter((b) => b.option === winnerOption);
-    const losingBets = bets.filter((b) => b.option !== winnerOption);
+    const winningBets = bets.filter((b) => b.option === winnerOptionRaw);
+    const losingBets = bets.filter((b) => b.option !== winnerOptionRaw);
     const winningTotal = winningBets.reduce((sum, b) => sum + b.amount, 0);
+
+    // Nobody hit the winning option → cancel & refund everyone
+    if (winningTotal === 0) {
+      const refunded = refundAllBets({
+        db,
+        guildId: prediction.guild_id,
+        predictionId: prediction.id,
+        bets,
+      });
+
+      db.prepare(
+        `UPDATE predictions SET status = 'settled', winner_option = ? WHERE id = ?`,
+      ).run(PREDICTION_CANCELLED_MARKER, prediction.id);
+
+      return {
+        prediction: getPrediction(prediction.id)!,
+        pool,
+        fee: 0,
+        distributable: pool,
+        winnerOption: PREDICTION_CANCELLED_MARKER,
+        optionTotals,
+        winners: refunded,
+        losers: [],
+        mode: 'refund',
+      };
+    }
 
     const winners: SettleParticipant[] = [];
     const losers: SettleParticipant[] = [];
     let paid = 0;
 
-    if (winningTotal > 0 && distributable > 0) {
-      for (const bet of winningBets) {
-        const payout = Math.floor((distributable * bet.amount) / winningTotal);
-        paid += payout;
-        const user = getUserById(bet.user_id);
-        if (!user) continue;
+    for (const bet of winningBets) {
+      const payout = Math.floor((distributable * bet.amount) / winningTotal);
+      paid += payout;
+      const user = getUserById(bet.user_id);
+      if (!user) continue;
 
-        if (payout > 0) {
-          applyDelta({
-            db,
-            guildId: prediction.guild_id,
-            userId: user.id,
-            delta: payout,
-            type: 'bet_win',
-            refType: 'prediction',
-            refId: prediction.id,
-            description: `Won ${payout} on #${prediction.id} (${winnerOption})`,
-          });
-        }
-
-        winners.push({
+      if (payout > 0) {
+        applyDelta({
+          db,
+          guildId: prediction.guild_id,
           userId: user.id,
-          discordId: user.discord_id,
-          nickname: user.nickname,
-          option: bet.option,
-          bet: bet.amount,
-          payout,
+          delta: payout,
+          type: 'bet_win',
+          refType: 'prediction',
+          refId: prediction.id,
+          description: `Won ${payout} on #${prediction.id} (${winnerOptionRaw})`,
         });
       }
-    } else {
-      for (const bet of winningBets) {
-        const user = getUserById(bet.user_id);
-        if (!user) continue;
-        winners.push({
-          userId: user.id,
-          discordId: user.discord_id,
-          nickname: user.nickname,
-          option: bet.option,
-          bet: bet.amount,
-          payout: 0,
-        });
-      }
+
+      winners.push({
+        userId: user.id,
+        discordId: user.discord_id,
+        nickname: user.nickname,
+        option: bet.option,
+        bet: bet.amount,
+        payout,
+      });
     }
 
     for (const bet of losingBets) {
@@ -301,9 +396,7 @@ export function settlePrediction(predictionId: number, winnerOption: string): Se
       });
     }
 
-    // fee + rounding dust (and entire pool when nobody won)
     const burnTotal = pool - paid;
-
     if (burnTotal > 0) {
       applyDelta({
         db,
@@ -319,18 +412,18 @@ export function settlePrediction(predictionId: number, winnerOption: string): Se
 
     db.prepare(
       `UPDATE predictions SET status = 'settled', winner_option = ? WHERE id = ?`,
-    ).run(winnerOption, prediction.id);
+    ).run(winnerOptionRaw, prediction.id);
 
-    const updated = getPrediction(prediction.id)!;
     return {
-      prediction: updated,
+      prediction: getPrediction(prediction.id)!,
       pool,
       fee: burnTotal,
       distributable: paid,
-      winnerOption,
+      winnerOption: winnerOptionRaw,
       optionTotals,
       winners,
       losers,
+      mode: 'payout',
     };
   });
 }

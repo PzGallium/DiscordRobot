@@ -37,9 +37,11 @@ cp .env.example .env
 
 ```bash
 npm install
-npm run register-commands
-npm run dev
+npm run register-commands   # 首次或命令有变更时执行一次
+npm run dev                 # 启动机器人
 ```
+
+**一键启动（macOS）**：双击项目里的 `启动机器人.command`（首次若提示无法打开，右键 → 打开）。关闭该窗口即停止机器人。
 
 生产构建：
 
@@ -69,7 +71,7 @@ npm start
 1. 管理员 `/prediction create`，先选截止时长下拉（1m / 5m / 10m / 1h / 2h / 5h / 12h / 24h / 自定义），可选模板 YES/NO 或 A/B/C/D
 2. 弹出表单填写标题与选项；若选「自定义」时长，再填天/小时/分钟
 3. 提交后频道出现竞猜面板；成员点击选项按钮 → 输入金额下注
-4. 面板自动刷新奖池；截止后按钮禁用；管理员 `/prediction settle` 开奖分账
+4. 面板自动刷新奖池；截止后按钮禁用；管理员 `/prediction settle` 开奖（无人猜中或填「退款」则全额退回）
 
 ## 经济参数（默认）
 

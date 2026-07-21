@@ -7,6 +7,7 @@ export type TxType =
   | 'daily'
   | 'bet'
   | 'bet_win'
+  | 'bet_refund'
   | 'fee_burn'
   | 'transfer_hold'
   | 'transfer_receive'

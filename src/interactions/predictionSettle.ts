@@ -41,7 +41,10 @@ export async function applySettleAndReply(input: {
   }
 
   await input.reply({
-    content: `竞猜 **#${result.prediction.id}**「${result.prediction.title}」已开奖，获胜选项：**${result.winnerOption}**`,
+    content:
+      result.mode === 'refund'
+        ? `竞猜 **#${result.prediction.id}**「${result.prediction.title}」已取消，下注已全额退回。`
+        : `竞猜 **#${result.prediction.id}**「${result.prediction.title}」已开奖，获胜选项：**${result.winnerOption}**`,
     embeds: [buildSettleAnnouncementEmbed(result)],
   });
 }
