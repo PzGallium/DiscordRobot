@@ -10,7 +10,7 @@ import {
   type DurationPresetValue,
   type PredictionOptionTemplate,
 } from '../ui/predictionCreateModal.js';
-import { buildSettlePredictionModal } from '../ui/predictionSettleModal.js';
+import { buildSettlePredictionSelect } from '../ui/predictionSettlePicker.js';
 import { isGuildAdmin } from '../utils/permissions.js';
 
 export const data = new SlashCommandBuilder()
@@ -95,7 +95,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         return;
       }
 
-      await interaction.showModal(buildSettlePredictionModal(list[0]!));
+      await interaction.reply({
+        content: '请选择要结算的竞猜：',
+        components: [buildSettlePredictionSelect(list)],
+        ephemeral: true,
+      });
     }
   } catch (err) {
     const message = err instanceof EconomyError ? err.message : '操作失败';

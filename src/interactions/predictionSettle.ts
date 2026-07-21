@@ -1,25 +1,37 @@
-import type { Client, ModalSubmitInteraction } from 'discord.js';
+import type {
+  ButtonInteraction,
+  Client,
+  StringSelectMenuInteraction,
+} from 'discord.js';
 import { EconomyError } from '../services/economy.js';
 import {
   getPrediction,
+  listOpenPredictions,
+  parseOptions,
   settlePrediction,
 } from '../services/prediction.js';
 import { buildSettleAnnouncementEmbed } from '../ui/predictionSettleAnnounce.js';
-import { PREDICTION_SETTLE_MODAL_ID } from '../ui/predictionSettleModal.js';
 import { buildPredictionEmbed } from '../ui/predictionPanel.js';
+import {
+  buildSettleChoiceEmbed,
+  buildSettleOptionComponents,
+  buildSettlePredictionSelect,
+  SETTLE_ABORT_ID,
+  SETTLE_PICK_SELECT_ID,
+  SETTLE_REFUND_PREFIX,
+  SETTLE_WIN_PREFIX,
+} from '../ui/predictionSettlePicker.js';
 import { isGuildAdmin } from '../utils/permissions.js';
 
-export async function applySettleAndReply(input: {
+export async function applySettle(input: {
   client: Client;
   guildId: string;
   predictionId: number;
   winner: string;
-  reply: (payload: { content?: string; embeds: ReturnType<typeof buildSettleAnnouncementEmbed>[] }) => Promise<unknown>;
-}): Promise<void> {
+}) {
   const before = getPrediction(input.predictionId);
   if (!before || before.guild_id !== input.guildId) {
-    await input.reply({ content: '找不到该竞猜。', embeds: [] });
-    return;
+    throw new EconomyError('找不到该竞猜。');
   }
 
   const result = settlePrediction(input.predictionId, input.winner);
@@ -40,52 +52,148 @@ export async function applySettleAndReply(input: {
     }
   }
 
-  await input.reply({
-    content:
-      result.mode === 'refund'
-        ? `竞猜 **#${result.prediction.id}**「${result.prediction.title}」已取消，下注已全额退回。`
-        : `竞猜 **#${result.prediction.id}**「${result.prediction.title}」已开奖，获胜选项：**${result.winnerOption}**`,
-    embeds: [buildSettleAnnouncementEmbed(result)],
-  });
+  return result;
 }
 
-export async function handlePredictionSettleModal(interaction: ModalSubmitInteraction): Promise<boolean> {
-  if (interaction.customId !== PREDICTION_SETTLE_MODAL_ID) return false;
+function requireAdmin(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+): boolean {
+  return Boolean(
+    interaction.guildId &&
+      interaction.member &&
+      isGuildAdmin(interaction.member),
+  );
+}
 
-  if (!interaction.guildId) {
-    await interaction.reply({ content: '只能在服务器里使用。', ephemeral: true });
-    return true;
-  }
+export async function handlePredictionSettleSelect(
+  interaction: StringSelectMenuInteraction,
+): Promise<boolean> {
+  if (interaction.customId !== SETTLE_PICK_SELECT_ID) return false;
 
-  if (!interaction.member || !isGuildAdmin(interaction.member)) {
+  if (!requireAdmin(interaction)) {
     await interaction.reply({ content: '需要管理员权限。', ephemeral: true });
     return true;
   }
 
-  const idRaw = interaction.fields.getTextInputValue('id').trim();
-  const winner = interaction.fields.getTextInputValue('winner').trim();
-  const predictionId = Number.parseInt(idRaw, 10);
-
-  if (!Number.isInteger(predictionId) || predictionId <= 0) {
-    await interaction.reply({ content: '竞猜 ID 必须是正整数。', ephemeral: true });
+  const predictionId = Number.parseInt(interaction.values[0] ?? '', 10);
+  const prediction = getPrediction(predictionId);
+  if (!prediction || prediction.guild_id !== interaction.guildId) {
+    await interaction.update({
+      content: '找不到该竞猜，可能已被结算。',
+      embeds: [],
+      components: [],
+    });
     return true;
   }
 
-  if (!winner) {
-    await interaction.reply({ content: '请填写获胜选项。', ephemeral: true });
+  if (prediction.status === 'settled') {
+    await interaction.update({
+      content: '该竞猜已经结算过了。',
+      embeds: [],
+      components: [],
+    });
+    return true;
+  }
+
+  await interaction.update({
+    content: `已选择 **#${prediction.id}**，请点选获胜选项：`,
+    embeds: [buildSettleChoiceEmbed(prediction)],
+    components: buildSettleOptionComponents(prediction),
+  });
+
+  return true;
+}
+
+export async function handlePredictionSettleButton(
+  interaction: ButtonInteraction,
+): Promise<boolean> {
+  const id = interaction.customId;
+  if (
+    id !== SETTLE_ABORT_ID &&
+    !id.startsWith(SETTLE_WIN_PREFIX) &&
+    !id.startsWith(SETTLE_REFUND_PREFIX)
+  ) {
+    return false;
+  }
+
+  if (!requireAdmin(interaction) || !interaction.guildId) {
+    await interaction.reply({ content: '需要管理员权限。', ephemeral: true });
+    return true;
+  }
+
+  if (id === SETTLE_ABORT_ID) {
+    const list = listOpenPredictions(interaction.guildId);
+    if (list.length === 0) {
+      await interaction.update({
+        content: '当前没有可结算的竞猜。',
+        embeds: [],
+        components: [],
+      });
+      return true;
+    }
+    await interaction.update({
+      content: '请选择要结算的竞猜：',
+      embeds: [],
+      components: [buildSettlePredictionSelect(list)],
+    });
     return true;
   }
 
   try {
-    await applySettleAndReply({
+    let predictionId: number;
+    let winner: string;
+
+    if (id.startsWith(SETTLE_REFUND_PREFIX)) {
+      predictionId = Number.parseInt(id.slice(SETTLE_REFUND_PREFIX.length), 10);
+      winner = '退款';
+    } else {
+      const rest = id.slice(SETTLE_WIN_PREFIX.length);
+      const [idRaw, indexRaw] = rest.split(':');
+      predictionId = Number.parseInt(idRaw ?? '', 10);
+      const optionIndex = Number.parseInt(indexRaw ?? '', 10);
+      const prediction = getPrediction(predictionId);
+      if (!prediction || prediction.guild_id !== interaction.guildId) {
+        throw new EconomyError('找不到该竞猜。');
+      }
+      const options = parseOptions(prediction.options_json);
+      const option = options[optionIndex];
+      if (!option) throw new EconomyError('无效选项。');
+      winner = option;
+    }
+
+    if (!Number.isInteger(predictionId) || predictionId <= 0) {
+      throw new EconomyError('无效竞猜 ID。');
+    }
+
+    const result = await applySettle({
       client: interaction.client,
       guildId: interaction.guildId,
       predictionId,
       winner,
-      reply: async (payload) => {
-        await interaction.reply(payload);
-      },
     });
+
+    await interaction.update({
+      content:
+        result.mode === 'refund'
+          ? `已取消 **#${result.prediction.id}**，下注已全额退回。`
+          : `已开奖 **#${result.prediction.id}**，获胜：**${result.winnerOption}**`,
+      embeds: [],
+      components: [],
+    });
+
+    const payload = {
+      content:
+        result.mode === 'refund'
+          ? `竞猜 **#${result.prediction.id}**「${result.prediction.title}」已取消，下注已全额退回。`
+          : `竞猜 **#${result.prediction.id}**「${result.prediction.title}」已开奖，获胜选项：**${result.winnerOption}**`,
+      embeds: [buildSettleAnnouncementEmbed(result)],
+    };
+
+    if (interaction.channel && interaction.channel.isTextBased() && 'send' in interaction.channel) {
+      await interaction.channel.send(payload);
+    } else {
+      await interaction.followUp(payload);
+    }
   } catch (err) {
     const message = err instanceof EconomyError ? err.message : '开奖失败';
     if (interaction.replied || interaction.deferred) {
