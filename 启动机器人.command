@@ -1,5 +1,5 @@
 #!/bin/bash
-# 可放到桌面双击启动；始终进入项目目录
+# 可放到桌面双击启动；始终进入项目目录，并用 caffeinate 防止休眠
 PROJECT_DIR="/Users/zijiapan/PersonalProject/DiscordRobot"
 cd "$PROJECT_DIR" || {
   echo "错误：找不到项目目录："
@@ -11,6 +11,7 @@ cd "$PROJECT_DIR" || {
 echo "================================"
 echo "  Pz Coin Bot 启动中..."
 echo "  $PROJECT_DIR"
+echo "  （已启用 caffeinate，运行期间尽量不休眠）"
 echo "================================"
 echo ""
 
@@ -26,6 +27,8 @@ if [ ! -d node_modules ]; then
   npm install
 fi
 
-echo "机器人已启动。关闭此窗口即停止机器人。"
+echo "机器人已启动。关闭此窗口即停止机器人，并恢复正常休眠。"
 echo ""
-npm run dev
+
+# -i 防空闲睡眠 / -m 防磁盘睡眠 / -s 插电时防系统睡眠 / -d 减少显示器相关休眠
+exec caffeinate -dims npm run dev
