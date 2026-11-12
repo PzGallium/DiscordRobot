@@ -31,7 +31,8 @@ cp .env.example .env
 
 - `DISCORD_TOKEN`：Bot Token
 - `CLIENT_ID`：Application ID
-- `GUILD_ID`：测试服务器 ID（开发期用 Guild Commands，秒级生效）
+- `GUILD_ID`：测试服务器 ID
+- `BOT_OWNER_IDS`：Bot Owner 的 Discord 用户 ID；多个 ID 用英文逗号分隔。Owner 可在任意已安装 Bot 的服务器中执行管理命令
 
 ### 3. 安装与启动
 
@@ -58,7 +59,7 @@ npm start
 | `/balance` | 全员 | 查询余额 |
 | `/leaderboard` | 全员 | Top 10 |
 | `/transfer` | 全员 | 转账（收款人点 Accept/Reject） |
-| `/prediction create` | 管理员 | 下拉选截止时长，再填标题/选项发布面板 |
+| `/prediction create` | 管理员 | 打开表单，填写标题、开放分钟数和选项 |
 | `/prediction settle` | 管理员 | 弹出表单开奖（预填最近一场，改获胜选项即可） |
 | `/prediction list` | 全员 | 列出进行中竞猜 |
 | `/redpacket` | 管理员 | 发红包 |
@@ -68,8 +69,8 @@ npm start
 
 ## 竞猜怎么玩
 
-1. 管理员 `/prediction create`，先选截止时长下拉（1m / 5m / 10m / 1h / 2h / 5h / 12h / 24h / 自定义），可选模板 YES/NO 或 A/B/C/D
-2. 弹出表单填写标题与选项；若选「自定义」时长，再填天/小时/分钟
+1. 管理员执行 `/prediction create` 后直接打开创建表单
+2. 表单自动保留当前服务器上一次竞猜的标题、选项和开放分钟数；首次使用时提供默认选项
 3. 提交后频道出现竞猜面板；成员点击选项按钮 → 输入金额下注
 4. 面板自动刷新奖池；截止后按钮禁用；管理员 `/prediction settle` 下拉选竞猜、点选获胜选项开奖（也可「取消并退款」）
 
@@ -78,7 +79,8 @@ npm start
 - 新用户：1000 Pz Coin
 - 每日签到：+100
 - 转账手续费：2%（转出方支付 amount + fee）
-- 竞猜手续费：5%（开奖时从奖池销毁）
+- 竞猜手续费：严格 5%（取整余数按下注额从高到低分给赢家）
+- 红包有效期：24 小时（未领取余额自动退回发放者）
 
 可在 `.env` 中覆盖，见 `.env.example`。
 
@@ -94,5 +96,5 @@ SQLite 文件默认在 `data/pzcoin.db`（已 gitignore）。所有余额变动�
 - [ ] 竞猜面板：点按钮 + 输入金额下注
 - [ ] 截止禁用、开奖分账、手续费销毁
 - [ ] 转账确认 + 2% 手续费
-- [ ] 红包领取、不可重复
+- [ ] 红包领取、不可重复、24 小时过期退款
 - [ ] `transactions` 可查流水

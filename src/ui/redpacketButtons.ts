@@ -2,9 +2,12 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'disc
 import type { RedPacketRow } from '../services/redpacket.js';
 import type { UserRow } from '../services/user.js';
 import { formatCoins } from '../utils/format.js';
+import { fromSqliteDatetime } from '../utils/time.js';
 
 export function buildRedPacketEmbed(packet: RedPacketRow, creator: UserRow): EmbedBuilder {
   const finished = packet.status !== 'open' || packet.remaining_count <= 0;
+  const expired = packet.status === 'expired';
+  const expiresAt = Math.floor(fromSqliteDatetime(packet.expires_at).getTime() / 1000);
   return new EmbedBuilder()
     .setTitle('🧧 红包')
     .setColor(finished ? 0x99aab5 : 0xed4245)
@@ -13,7 +16,12 @@ export function buildRedPacketEmbed(packet: RedPacketRow, creator: UserRow): Emb
         `来自：<@${creator.discord_id}>`,
         `总额：**${formatCoins(packet.total_amount)}**`,
         `剩余：${packet.remaining_count}/${packet.count} 个 · ${formatCoins(packet.remaining_amount)}`,
-        finished ? '\n已领完。' : '\n点击下方按钮领取（每人限一次）。',
+        `过期：<t:${expiresAt}:R>`,
+        expired
+          ? '\n已过期，未领取余额已退回发放者。'
+          : finished
+            ? '\n已领完。'
+            : '\n点击下方按钮领取（每人限一次）。',
       ].join('\n'),
     )
     .setFooter({ text: `Red packet #${packet.id}` });

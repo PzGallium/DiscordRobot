@@ -1,8 +1,15 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  ApplicationIntegrationType,
+  InteractionContextType,
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+} from 'discord.js';
 import { ensureUser } from '../services/user.js';
 import { formatCoins } from '../utils/format.js';
 
 export const data = new SlashCommandBuilder()
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+  .setContexts(InteractionContextType.Guild)
   .setName('balance')
   .setDescription('查询你的 Pz Coin 余额');
 

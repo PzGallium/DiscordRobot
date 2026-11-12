@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS red_packets (
   channel_id TEXT,
   message_id TEXT,
   status TEXT NOT NULL DEFAULT 'open',
+  expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (created_by) REFERENCES users(id)
 );

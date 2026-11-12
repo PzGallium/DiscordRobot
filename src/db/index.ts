@@ -20,6 +20,18 @@ export function getDb(): Database.Database {
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
 
+  const redPacketColumns = db.pragma('table_info(red_packets)') as Array<{ name: string }>;
+  if (!redPacketColumns.some((column) => column.name === 'expires_at')) {
+    db.exec(`ALTER TABLE red_packets ADD COLUMN expires_at TEXT`);
+  }
+  db.exec(`
+    UPDATE red_packets
+    SET expires_at = datetime(created_at, '+24 hours')
+    WHERE expires_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_red_packets_expiry
+    ON red_packets(status, expires_at);
+  `);
+
   return db;
 }
 

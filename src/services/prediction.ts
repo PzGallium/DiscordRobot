@@ -30,6 +30,12 @@ export type BetRow = {
   created_at: string;
 };
 
+export type PredictionCreateDefaults = {
+  title: string;
+  options: string[];
+  durationMinutes: number;
+};
+
 export function parseOptions(optionsJson: string): string[] {
   return JSON.parse(optionsJson) as string[];
 }
@@ -38,6 +44,25 @@ export function getPrediction(id: number): PredictionRow | undefined {
   return getDb()
     .prepare(`SELECT * FROM predictions WHERE id = ?`)
     .get(id) as PredictionRow | undefined;
+}
+
+export function getLatestPredictionDefaults(
+  guildId: string,
+): PredictionCreateDefaults | undefined {
+  const latest = getDb()
+    .prepare(`SELECT * FROM predictions WHERE guild_id = ? ORDER BY id DESC LIMIT 1`)
+    .get(guildId) as PredictionRow | undefined;
+  if (!latest) return undefined;
+
+  const durationMs =
+    fromSqliteDatetime(latest.deadline).getTime() -
+    fromSqliteDatetime(latest.created_at).getTime();
+
+  return {
+    title: latest.title,
+    options: parseOptions(latest.options_json),
+    durationMinutes: Math.max(1, Math.round(durationMs / 60_000)),
+  };
 }
 
 export function listOpenPredictions(guildId: string): PredictionRow[] {
@@ -245,7 +270,7 @@ function refundAllBets(input: {
   const refunded: SettleParticipant[] = [];
   for (const bet of input.bets) {
     const user = getUserById(bet.user_id);
-    if (!user) continue;
+    if (!user) throw new EconomyError('User not found');
 
     applyDelta({
       db: input.db,
@@ -352,13 +377,24 @@ export function settlePrediction(predictionId: number, winnerOptionRaw: string):
 
     const winners: SettleParticipant[] = [];
     const losers: SettleParticipant[] = [];
-    let paid = 0;
+    const payouts = winningBets.map((bet) => ({
+      bet,
+      payout: Math.floor((distributable * bet.amount) / winningTotal),
+    }));
+    let remainder = distributable - payouts.reduce((sum, item) => sum + item.payout, 0);
+    const remainderOrder = [...payouts].sort(
+      (a, b) => b.bet.amount - a.bet.amount || a.bet.id - b.bet.id,
+    );
+    for (const item of remainderOrder) {
+      if (remainder <= 0) break;
+      item.payout += 1;
+      remainder -= 1;
+    }
 
-    for (const bet of winningBets) {
-      const payout = Math.floor((distributable * bet.amount) / winningTotal);
-      paid += payout;
+    let paid = 0;
+    for (const { bet, payout } of payouts) {
       const user = getUserById(bet.user_id);
-      if (!user) continue;
+      if (!user) throw new EconomyError('User not found');
 
       if (payout > 0) {
         applyDelta({
@@ -372,6 +408,7 @@ export function settlePrediction(predictionId: number, winnerOptionRaw: string):
           description: `Won ${payout} on #${prediction.id} (${winnerOptionRaw})`,
         });
       }
+      paid += payout;
 
       winners.push({
         userId: user.id,
@@ -385,7 +422,7 @@ export function settlePrediction(predictionId: number, winnerOptionRaw: string):
 
     for (const bet of losingBets) {
       const user = getUserById(bet.user_id);
-      if (!user) continue;
+      if (!user) throw new EconomyError('User not found');
       losers.push({
         userId: user.id,
         discordId: user.discord_id,
@@ -396,17 +433,20 @@ export function settlePrediction(predictionId: number, winnerOptionRaw: string):
       });
     }
 
-    const burnTotal = pool - paid;
-    if (burnTotal > 0) {
+    if (paid !== distributable) {
+      throw new EconomyError('Payout allocation mismatch');
+    }
+
+    if (fee > 0) {
       applyDelta({
         db,
         guildId: prediction.guild_id,
         userId: null,
-        delta: -burnTotal,
+        delta: -fee,
         type: 'fee_burn',
         refType: 'prediction',
         refId: prediction.id,
-        description: `Prediction #${prediction.id} fee/dust burn ${burnTotal}`,
+        description: `Prediction #${prediction.id} fee burn ${fee}`,
       });
     }
 
@@ -417,8 +457,8 @@ export function settlePrediction(predictionId: number, winnerOptionRaw: string):
     return {
       prediction: getPrediction(prediction.id)!,
       pool,
-      fee: burnTotal,
-      distributable: paid,
+      fee,
+      distributable,
       winnerOption: winnerOptionRaw,
       optionTotals,
       winners,

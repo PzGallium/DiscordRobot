@@ -15,6 +15,7 @@ export type TxType =
   | 'transfer_fee'
   | 'redpacket_create'
   | 'redpacket_claim'
+  | 'redpacket_refund'
   | 'admin_adjust';
 
 export type ApplyDeltaInput = {

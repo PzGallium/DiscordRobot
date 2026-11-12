@@ -1,6 +1,7 @@
 import {
+  ApplicationIntegrationType,
   ChannelType,
-  PermissionFlagsBits,
+  InteractionContextType,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
   type TextChannel,
@@ -9,12 +10,13 @@ import { EconomyError } from '../services/economy.js';
 import { createRedPacket, setRedPacketMessage } from '../services/redpacket.js';
 import { buildRedPacketButton, buildRedPacketEmbed } from '../ui/redpacketButtons.js';
 import { formatCoins } from '../utils/format.js';
-import { isGuildAdmin } from '../utils/permissions.js';
+import { canManageBot } from '../utils/permissions.js';
 
 export const data = new SlashCommandBuilder()
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+  .setContexts(InteractionContextType.Guild)
   .setName('redpacket')
   .setDescription('发放红包（管理员，从你的余额扣除）')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addIntegerOption((opt) =>
     opt.setName('amount').setDescription('总金额').setRequired(true).setMinValue(1),
   )
@@ -28,7 +30,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  if (!interaction.member || !isGuildAdmin(interaction.member)) {
+  if (!interaction.member || !canManageBot(interaction.member, interaction.user.id)) {
     await interaction.reply({ content: '需要管理员权限。', ephemeral: true });
     return;
   }

@@ -4,6 +4,7 @@ import {
   type APIInteractionGuildMember,
   type GuildMember,
 } from 'discord.js';
+import { config } from '../config.js';
 
 export function isGuildAdmin(
   member: GuildMember | APIInteractionGuildMember | null | undefined,
@@ -23,4 +24,11 @@ export function isGuildAdmin(
     perms.has(PermissionFlagsBits.Administrator) ||
     perms.has(PermissionFlagsBits.ManageGuild)
   );
+}
+
+export function canManageBot(
+  member: GuildMember | APIInteractionGuildMember | null | undefined,
+  userId: string,
+): boolean {
+  return config.botOwnerIds.has(userId) || isGuildAdmin(member);
 }

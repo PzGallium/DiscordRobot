@@ -1,10 +1,18 @@
-import { EmbedBuilder, SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  ApplicationIntegrationType,
+  EmbedBuilder,
+  InteractionContextType,
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+} from 'discord.js';
 import { getLeaderboard } from '../services/leaderboard.js';
 import { formatCoins } from '../utils/format.js';
 
 const MEDALS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
 
 export const data = new SlashCommandBuilder()
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+  .setContexts(InteractionContextType.Guild)
   .setName('leaderboard')
   .setDescription('查看 Pz Coin Top 10');
 

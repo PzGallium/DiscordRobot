@@ -24,12 +24,18 @@ const { closeDb } = await import('./db/index.js');
 const { ensureUser } = await import('./services/user.js');
 const { claimDaily } = await import('./services/daily.js');
 const { getLeaderboard } = await import('./services/leaderboard.js');
-const { createPrediction, placeBet, settlePrediction, getPoolTotal } = await import(
-  './services/prediction.js'
-);
+const {
+  createPrediction,
+  getLatestPredictionDefaults,
+  placeBet,
+  settlePrediction,
+  getPoolTotal,
+} = await import('./services/prediction.js');
 const { createTransfer, acceptTransfer } = await import('./services/transfer.js');
-const { createRedPacket, claimRedPacket } = await import('./services/redpacket.js');
-const { applyDelta, withTransaction } = await import('./services/economy.js');
+const { createRedPacket, claimRedPacket, expireOpenRedPackets } = await import(
+  './services/redpacket.js'
+);
+const { applyDelta, getBalance, withTransaction } = await import('./services/economy.js');
 
 const guild = 'guild1';
 
@@ -85,6 +91,54 @@ withTransaction((db) => {
   });
 });
 
+const charlie = ensureUser(guild, 'charlie', 'Charlie');
+const dana = ensureUser(guild, 'dana', 'Dana');
+const splitPrediction = createPrediction({
+  guildId: guild,
+  title: 'Remainder test',
+  options: ['YES', 'NO'],
+  deadline,
+  createdBy: 'admin',
+  channelId: 'ch1',
+});
+for (const bettor of [
+  { id: 'alice', name: 'Alice' },
+  { id: charlie.discord_id, name: 'Charlie' },
+  { id: dana.discord_id, name: 'Dana' },
+]) {
+  placeBet({
+    predictionId: splitPrediction.id,
+    guildId: guild,
+    discordId: bettor.id,
+    nickname: bettor.name,
+    option: 'YES',
+    amount: 10,
+  });
+}
+placeBet({
+  predictionId: splitPrediction.id,
+  guildId: guild,
+  discordId: 'bob',
+  nickname: 'Bob',
+  option: 'NO',
+  amount: 10,
+});
+const splitSettled = settlePrediction(splitPrediction.id, 'YES');
+console.assert(splitSettled.fee === 2, `exact fee got ${splitSettled.fee}`);
+console.assert(splitSettled.distributable === 38, `distributable got ${splitSettled.distributable}`);
+console.assert(
+  splitSettled.winners.reduce((sum, winner) => sum + winner.payout, 0) === 38,
+  'all payout remainder distributed',
+);
+console.assert(
+  splitSettled.winners.map((winner) => winner.payout).join(',') === '13,13,12',
+  'remainder follows stable winner order',
+);
+const latestDefaults = getLatestPredictionDefaults(guild);
+console.assert(latestDefaults?.title === 'Remainder test', 'latest title default');
+console.assert(latestDefaults?.options.join(',') === 'YES,NO', 'latest options default');
+console.assert(latestDefaults?.durationMinutes === 1, 'latest duration default');
+
 const t = createTransfer({
   guildId: guild,
   fromDiscordId: 'bob',
@@ -112,6 +166,21 @@ const claim = claimRedPacket({
   nickname: 'Alice',
 });
 console.assert(claim.amount > 0, 'claim > 0');
+
+const bobBeforeExpiryRefund = getBalance(bob.id);
+withTransaction((db) => {
+  db.prepare(`UPDATE red_packets SET expires_at = '2000-01-01 00:00:00' WHERE id = ?`).run(packet.id);
+});
+const expiredPackets = expireOpenRedPackets();
+console.assert(expiredPackets.length === 1, 'one red packet expired');
+console.assert(
+  expiredPackets[0]!.refunded === claim.packet.remaining_amount,
+  'unclaimed red packet balance refunded',
+);
+console.assert(
+  getBalance(bob.id) === bobBeforeExpiryRefund + claim.packet.remaining_amount,
+  'creator received red packet refund',
+);
 
 const board = getLeaderboard(guild, 10);
 console.assert(board.length >= 2, 'leaderboard');

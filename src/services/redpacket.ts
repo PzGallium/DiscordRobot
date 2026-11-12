@@ -1,8 +1,10 @@
+import { config } from '../config.js';
 import { getDb } from '../db/index.js';
+import { fromSqliteDatetime, toSqliteDatetime } from '../utils/time.js';
 import { applyDelta, EconomyError, withTransaction } from './economy.js';
 import { ensureUser, getUserById, type UserRow } from './user.js';
 
-export type RedPacketStatus = 'open' | 'closed';
+export type RedPacketStatus = 'open' | 'closed' | 'expired';
 
 export type RedPacketRow = {
   id: number;
@@ -15,7 +17,13 @@ export type RedPacketRow = {
   channel_id: string | null;
   message_id: string | null;
   status: RedPacketStatus;
+  expires_at: string;
   created_at: string;
+};
+
+export type ExpiredRedPacket = {
+  packet: RedPacketRow;
+  refunded: number;
 };
 
 /** Random claim amount using 二倍均值法, last packet takes remainder. */
@@ -47,6 +55,7 @@ export function createRedPacket(input: {
 
   return withTransaction((db) => {
     const creator = ensureUser(input.guildId, input.creatorDiscordId, input.creatorNickname);
+    const expiresAt = new Date(Date.now() + config.redPacketExpireMs);
 
     applyDelta({
       db,
@@ -60,8 +69,8 @@ export function createRedPacket(input: {
     const result = db
       .prepare(
         `INSERT INTO red_packets
-         (guild_id, total_amount, count, remaining_amount, remaining_count, created_by, channel_id, status)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`,
+         (guild_id, total_amount, count, remaining_amount, remaining_count, created_by, channel_id, status, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
       )
       .run(
         input.guildId,
@@ -71,6 +80,7 @@ export function createRedPacket(input: {
         input.count,
         creator.id,
         input.channelId,
+        toSqliteDatetime(expiresAt),
       );
 
     return {
@@ -88,19 +98,73 @@ export function setRedPacketMessage(id: number, messageId: string): void {
   getDb().prepare(`UPDATE red_packets SET message_id = ? WHERE id = ?`).run(messageId, id);
 }
 
+function expireRedPacket(
+  db: ReturnType<typeof getDb>,
+  packet: RedPacketRow,
+): ExpiredRedPacket {
+  const refunded = packet.remaining_amount;
+  if (refunded > 0) {
+    applyDelta({
+      db,
+      guildId: packet.guild_id,
+      userId: packet.created_by,
+      delta: refunded,
+      type: 'redpacket_refund',
+      refType: 'red_packet',
+      refId: packet.id,
+      description: `Red packet #${packet.id} expired, refund ${refunded}`,
+    });
+  }
+
+  db.prepare(
+    `UPDATE red_packets
+     SET remaining_amount = 0, remaining_count = 0, status = 'expired'
+     WHERE id = ?`,
+  ).run(packet.id);
+
+  const updated = db.prepare(`SELECT * FROM red_packets WHERE id = ?`).get(packet.id) as RedPacketRow;
+  return { packet: updated, refunded };
+}
+
+export function expireOpenRedPackets(): ExpiredRedPacket[] {
+  const db = getDb();
+  const due = db
+    .prepare(`SELECT * FROM red_packets WHERE status = 'open' AND expires_at <= ?`)
+    .all(toSqliteDatetime()) as RedPacketRow[];
+
+  const expired: ExpiredRedPacket[] = [];
+  for (const packet of due) {
+    const result = withTransaction((txDb) => {
+      const current = txDb
+        .prepare(`SELECT * FROM red_packets WHERE id = ?`)
+        .get(packet.id) as RedPacketRow | undefined;
+      if (!current || current.status !== 'open') return null;
+      return expireRedPacket(txDb, current);
+    });
+    if (result) expired.push(result);
+  }
+  return expired;
+}
+
 export function claimRedPacket(input: {
   packetId: number;
   guildId: string;
   discordId: string;
   nickname: string;
 }): { amount: number; packet: RedPacketRow; user: UserRow } {
-  return withTransaction((db) => {
+  const result = withTransaction((db) => {
     const packet = db
       .prepare(`SELECT * FROM red_packets WHERE id = ?`)
       .get(input.packetId) as RedPacketRow | undefined;
 
     if (!packet || packet.guild_id !== input.guildId) {
       throw new EconomyError('Red packet not found');
+    }
+    if (packet.status === 'open' && fromSqliteDatetime(packet.expires_at).getTime() <= Date.now()) {
+      return { kind: 'expired' as const, result: expireRedPacket(db, packet) };
+    }
+    if (packet.status === 'expired') {
+      return { kind: 'expired' as const, result: { packet, refunded: 0 } };
     }
     if (packet.status !== 'open' || packet.remaining_count <= 0) {
       throw new EconomyError('This red packet is finished');
@@ -142,9 +206,17 @@ export function claimRedPacket(input: {
     });
 
     return {
-      amount,
-      packet: getRedPacket(packet.id)!,
-      user: getUserById(user.id)!,
+      kind: 'claimed' as const,
+      result: {
+        amount,
+        packet: getRedPacket(packet.id)!,
+        user: getUserById(user.id)!,
+      },
     };
   });
+
+  if (result.kind === 'expired') {
+    throw new EconomyError('This red packet expired; the remaining balance was refunded');
+  }
+  return result.result;
 }

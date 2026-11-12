@@ -7,27 +7,22 @@ import { EconomyError } from '../services/economy.js';
 import { createPrediction, setPredictionMessage } from '../services/prediction.js';
 import {
   buildCreatePredictionModal,
-  formatDurationLabel,
-  isDurationPreset,
-  parseDurationFields,
-  PREDICTION_CREATE_MODAL_PREFIX,
-  resolvePresetDuration,
-  type DurationPresetValue,
+  PREDICTION_CREATE_MODAL_ID,
 } from '../ui/predictionCreateModal.js';
 import { buildPredictionButtons, buildPredictionEmbed } from '../ui/predictionPanel.js';
-import { isGuildAdmin } from '../utils/permissions.js';
+import { canManageBot } from '../utils/permissions.js';
 
 export { buildCreatePredictionModal };
 
 export async function handlePredictionCreateModal(interaction: ModalSubmitInteraction): Promise<boolean> {
-  if (!interaction.customId.startsWith(PREDICTION_CREATE_MODAL_PREFIX)) return false;
+  if (interaction.customId !== PREDICTION_CREATE_MODAL_ID) return false;
 
   if (!interaction.guildId || !interaction.channel) {
     await interaction.reply({ content: '只能在服务器频道里使用。', ephemeral: true });
     return true;
   }
 
-  if (!interaction.member || !isGuildAdmin(interaction.member)) {
+  if (!interaction.member || !canManageBot(interaction.member, interaction.user.id)) {
     await interaction.reply({ content: '需要管理员权限。', ephemeral: true });
     return true;
   }
@@ -40,12 +35,6 @@ export async function handlePredictionCreateModal(interaction: ModalSubmitIntera
     return true;
   }
 
-  const durationKey = interaction.customId.slice(PREDICTION_CREATE_MODAL_PREFIX.length);
-  if (!isDurationPreset(durationKey)) {
-    await interaction.reply({ content: '无效的截止时长。', ephemeral: true });
-    return true;
-  }
-
   const title = interaction.fields.getTextInputValue('title').trim();
   const optionsRaw = interaction.fields.getTextInputValue('options');
   const options = optionsRaw
@@ -53,42 +42,24 @@ export async function handlePredictionCreateModal(interaction: ModalSubmitIntera
     .map((s) => s.trim())
     .filter(Boolean);
 
-  let totalMs = 0;
-  let durationLabel = '';
+  const minutesRaw = interaction.fields.getTextInputValue('minutes').trim();
+  const minutes = /^\d+$/.test(minutesRaw) ? Number.parseInt(minutesRaw, 10) : 0;
 
-  if (durationKey === 'custom') {
-    const duration = parseDurationFields(
-      interaction.fields.getTextInputValue('days'),
-      interaction.fields.getTextInputValue('hours'),
-      interaction.fields.getTextInputValue('minutes'),
-    );
-
-    if (!duration) {
-      await interaction.reply({
-        content: '天 / 小时 / 分钟 请填写非负整数（例如 0、1、30）。',
-        ephemeral: true,
-      });
-      return true;
-    }
-    if (duration.totalMs <= 0) {
-      await interaction.reply({
-        content: '截止时长必须大于 0，请至少填写分钟、小时或天中的一项。',
-        ephemeral: true,
-      });
-      return true;
-    }
-    const maxMs = 30 * 24 * 60 * 60 * 1000;
-    if (duration.totalMs > maxMs) {
-      await interaction.reply({ content: '截止时长最长 30 天。', ephemeral: true });
-      return true;
-    }
-    totalMs = duration.totalMs;
-    durationLabel = formatDurationLabel(duration.days, duration.hours, duration.minutes);
-  } else {
-    const preset = resolvePresetDuration(durationKey as Exclude<DurationPresetValue, 'custom'>);
-    totalMs = preset.totalMs;
-    durationLabel = preset.label;
+  if (minutes <= 0) {
+    await interaction.reply({
+      content: '开放时间必须填写大于 0 的整数分钟。',
+      ephemeral: true,
+    });
+    return true;
   }
+  const maxMinutes = 30 * 24 * 60;
+  if (minutes > maxMinutes) {
+    await interaction.reply({ content: '截止时长最长 30 天。', ephemeral: true });
+    return true;
+  }
+
+  const totalMs = minutes * 60 * 1000;
+  const durationLabel = `${minutes} 分钟`;
 
   const deadline = new Date(Date.now() + totalMs);
 

@@ -15,8 +15,8 @@ async function main(): Promise<void> {
   const body = commands.map((c) => c.data.toJSON());
   const rest = new REST({ version: '10' }).setToken(config.token);
 
-  console.log(`Registering ${body.length} guild commands to ${config.guildId}...`);
-  await rest.put(Routes.applicationGuildCommands(config.clientId, config.guildId), {
+  console.log(`Registering ${body.length} global commands...`);
+  await rest.put(Routes.applicationCommands(config.clientId), {
     body,
   });
   console.log('Commands registered.');

@@ -21,7 +21,7 @@ import {
   SETTLE_REFUND_PREFIX,
   SETTLE_WIN_PREFIX,
 } from '../ui/predictionSettlePicker.js';
-import { isGuildAdmin } from '../utils/permissions.js';
+import { canManageBot } from '../utils/permissions.js';
 
 export async function applySettle(input: {
   client: Client;
@@ -61,7 +61,7 @@ function requireAdmin(
   return Boolean(
     interaction.guildId &&
       interaction.member &&
-      isGuildAdmin(interaction.member),
+      canManageBot(interaction.member, interaction.user.id),
   );
 }
 

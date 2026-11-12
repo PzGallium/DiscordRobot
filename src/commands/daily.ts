@@ -1,8 +1,15 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  ApplicationIntegrationType,
+  InteractionContextType,
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+} from 'discord.js';
 import { claimDaily } from '../services/daily.js';
 import { formatCoins } from '../utils/format.js';
 
 export const data = new SlashCommandBuilder()
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+  .setContexts(InteractionContextType.Guild)
   .setName('daily')
   .setDescription('每日签到领取 Pz Coin');
 

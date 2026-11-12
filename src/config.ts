@@ -18,10 +18,20 @@ function intEnv(name: string, fallback: number): number {
   return n;
 }
 
+function idSetEnv(name: string): ReadonlySet<string> {
+  return new Set(
+    (process.env[name] ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
+}
+
 export const config = {
   token: required('DISCORD_TOKEN'),
   clientId: required('CLIENT_ID'),
   guildId: required('GUILD_ID'),
+  botOwnerIds: idSetEnv('BOT_OWNER_IDS'),
   currencyName: process.env.CURRENCY_NAME ?? 'Pz Coin',
   startingBalance: intEnv('STARTING_BALANCE', 1000),
   dailyReward: intEnv('DAILY_REWARD', 100),
@@ -30,6 +40,7 @@ export const config = {
   /** Prediction pool fee in basis points (500 = 5%) */
   predictionFeeBps: intEnv('PREDICTION_FEE_BPS', 500),
   transferExpireMs: intEnv('TRANSFER_EXPIRE_MS', 5 * 60 * 1000),
+  redPacketExpireMs: intEnv('REDPACKET_EXPIRE_MS', 24 * 60 * 60 * 1000),
   dailyTimezone: process.env.DAILY_TIMEZONE ?? 'America/New_York',
   dbPath: process.env.DB_PATH ?? 'data/pzcoin.db',
 } as const;

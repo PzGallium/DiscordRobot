@@ -1,44 +1,24 @@
 import {
+  ApplicationIntegrationType,
+  InteractionContextType,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import { EconomyError } from '../services/economy.js';
-import { listOpenPredictions } from '../services/prediction.js';
-import {
-  buildCreatePredictionModal,
-  DURATION_PRESET_CHOICES,
-  type DurationPresetValue,
-  type PredictionOptionTemplate,
-} from '../ui/predictionCreateModal.js';
+import { getLatestPredictionDefaults, listOpenPredictions } from '../services/prediction.js';
+import { buildCreatePredictionModal } from '../ui/predictionCreateModal.js';
 import { buildSettlePredictionSelect } from '../ui/predictionSettlePicker.js';
-import { isGuildAdmin } from '../utils/permissions.js';
+import { canManageBot } from '../utils/permissions.js';
 
 export const data = new SlashCommandBuilder()
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+  .setContexts(InteractionContextType.Guild)
   .setName('prediction')
   .setDescription('竞猜系统')
   .addSubcommand((sub) =>
     sub
       .setName('create')
-      .setDescription('创建竞猜并发布面板（管理员）')
-      .addStringOption((opt) =>
-        opt
-          .setName('duration')
-          .setDescription('提交后多久截止下注')
-          .setRequired(true)
-          .addChoices(...DURATION_PRESET_CHOICES),
-      )
-      .addStringOption((opt) =>
-        opt
-          .setName('template')
-          .setDescription('选项模板')
-          .setRequired(false)
-          .addChoices(
-            { name: 'YES / NO（默认）', value: 'yesno' },
-            { name: 'A / B / C / D', value: 'abcd' },
-            { name: 'A / B / C', value: 'abc' },
-            { name: '自定义多选项', value: 'custom' },
-          ),
-      ),
+      .setDescription('创建竞猜并发布面板（管理员）'),
   )
   .addSubcommand((sub) =>
     sub.setName('settle').setDescription('开奖结算（管理员）'),
@@ -74,17 +54,15 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  if (!interaction.member || !isGuildAdmin(interaction.member)) {
+  if (!interaction.member || !canManageBot(interaction.member, interaction.user.id)) {
     await interaction.reply({ content: '需要管理员权限。', ephemeral: true });
     return;
   }
 
   try {
     if (sub === 'create') {
-      const duration = interaction.options.getString('duration', true) as DurationPresetValue;
-      const template = (interaction.options.getString('template') ??
-        'yesno') as PredictionOptionTemplate;
-      await interaction.showModal(buildCreatePredictionModal(template, duration));
+      const defaults = getLatestPredictionDefaults(interaction.guildId);
+      await interaction.showModal(buildCreatePredictionModal(defaults));
       return;
     }
 

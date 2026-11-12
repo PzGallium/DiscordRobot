@@ -12,9 +12,11 @@ import { config } from './config.js';
 import { closeDb, getDb } from './db/index.js';
 import { handleComponentInteraction } from './interactions/index.js';
 import { closeExpiredPredictions, getPrediction } from './services/prediction.js';
+import { expireOpenRedPackets } from './services/redpacket.js';
 import { expirePendingTransfers } from './services/transfer.js';
 import { getUserById } from './services/user.js';
 import { buildPredictionButtons, buildPredictionEmbed } from './ui/predictionPanel.js';
+import { buildRedPacketButton, buildRedPacketEmbed } from './ui/redpacketButtons.js';
 import { buildTransferButtons, buildTransferEmbed } from './ui/transferButtons.js';
 
 const commandModules: SlashCommand[] = [
@@ -74,6 +76,26 @@ async function refreshExpiredTransfers(client: ReturnType<typeof createClient>):
   }
 }
 
+async function refreshExpiredRedPackets(client: ReturnType<typeof createClient>): Promise<void> {
+  const expired = expireOpenRedPackets();
+  for (const { packet } of expired) {
+    if (!packet.channel_id || !packet.message_id) continue;
+    try {
+      const channel = await client.channels.fetch(packet.channel_id);
+      if (!channel || !channel.isTextBased() || !('messages' in channel)) continue;
+      const message = await channel.messages.fetch(packet.message_id);
+      const creator = getUserById(packet.created_by);
+      if (!creator) continue;
+      await message.edit({
+        embeds: [buildRedPacketEmbed(packet, creator)],
+        components: [buildRedPacketButton(packet.id, true)],
+      });
+    } catch {
+      // ignore
+    }
+  }
+}
+
 async function main(): Promise<void> {
   getDb();
   const client = createClient();
@@ -88,10 +110,12 @@ async function main(): Promise<void> {
 
     void refreshClosedPredictionPanels(client);
     void refreshExpiredTransfers(client);
+    void refreshExpiredRedPackets(client);
 
     setInterval(() => {
       void refreshClosedPredictionPanels(client);
       void refreshExpiredTransfers(client);
+      void refreshExpiredRedPackets(client);
     }, 30_000);
   });
 

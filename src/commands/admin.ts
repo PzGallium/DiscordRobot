@@ -1,17 +1,19 @@
 import {
-  PermissionFlagsBits,
+  ApplicationIntegrationType,
+  InteractionContextType,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import { applyDelta, EconomyError, withTransaction } from '../services/economy.js';
 import { ensureUser } from '../services/user.js';
 import { formatCoins } from '../utils/format.js';
-import { isGuildAdmin } from '../utils/permissions.js';
+import { canManageBot } from '../utils/permissions.js';
 
 export const data = new SlashCommandBuilder()
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+  .setContexts(InteractionContextType.Guild)
   .setName('admin')
   .setDescription('管理员工具')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((sub) =>
     sub
       .setName('addmoney')
@@ -28,7 +30,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  if (!isGuildAdmin(interaction.member)) {
+  if (!canManageBot(interaction.member, interaction.user.id)) {
     await interaction.reply({ content: '需要管理员权限。', ephemeral: true });
     return;
   }

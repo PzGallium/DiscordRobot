@@ -1,10 +1,17 @@
-import { SlashCommandBuilder, type ChatInputCommandInteraction } from 'discord.js';
+import {
+  ApplicationIntegrationType,
+  InteractionContextType,
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+} from 'discord.js';
 import { EconomyError } from '../services/economy.js';
 import { createTransfer, setTransferMessage } from '../services/transfer.js';
 import { buildTransferButtons, buildTransferEmbed } from '../ui/transferButtons.js';
 import { formatCoins } from '../utils/format.js';
 
 export const data = new SlashCommandBuilder()
+  .setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+  .setContexts(InteractionContextType.Guild)
   .setName('transfer')
   .setDescription('向其他成员转账（需对方确认）')
   .addUserOption((opt) => opt.setName('user').setDescription('收款人').setRequired(true))
