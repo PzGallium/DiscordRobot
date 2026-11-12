@@ -29,14 +29,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   if (!result.ok) {
     await interaction.reply({
-      content: `今天已经签到过了。当前余额：${formatCoins(result.balance)}`,
+      content: `今天已经签到过了。当前余额：${formatCoins(result.balance, interaction.guildId)}`,
       ephemeral: true,
     });
     return;
   }
 
   await interaction.reply({
-    content: `签到成功！+${formatCoins(result.reward)}\n余额：${formatCoins(result.balance)}`,
+    content: `签到成功！+${formatCoins(result.reward, interaction.guildId)}\n余额：${formatCoins(result.balance, interaction.guildId)}`,
     ephemeral: true,
   });
 }

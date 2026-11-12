@@ -7,7 +7,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
 } from 'discord.js';
-import { config } from '../config.js';
+import { getGuildSettings } from '../services/guildSettings.js';
 import {
   getOptionTotals,
   getPoolTotal,
@@ -18,6 +18,7 @@ import { formatCoins } from '../utils/format.js';
 import { discordTimestamp, fromSqliteDatetime } from '../utils/time.js';
 
 export function buildPredictionEmbed(prediction: PredictionRow): EmbedBuilder {
+  const settings = getGuildSettings(prediction.guild_id);
   const options = parseOptions(prediction.options_json);
   const totals = getOptionTotals(prediction.id);
   const pool = getPoolTotal(prediction.id);
@@ -40,7 +41,7 @@ export function buildPredictionEmbed(prediction: PredictionRow): EmbedBuilder {
 
   const optionEmojis = ['🟢', '🔴', '🔵', '🟣', '🟡'];
   const optionLines = options
-    .map((opt, i) => `${optionEmojis[i] ?? '⚪'} **${opt}**：${formatCoins(totals[opt] ?? 0)}`)
+    .map((opt, i) => `${optionEmojis[i] ?? '⚪'} **${opt}**：${formatCoins(totals[opt] ?? 0, prediction.guild_id)}`)
     .join('\n');
 
   const embed = new EmbedBuilder()
@@ -50,12 +51,12 @@ export function buildPredictionEmbed(prediction: PredictionRow): EmbedBuilder {
       [
         `状态：**${statusLabel}**`,
         `截止：${discordTimestamp(deadline, 'F')}（${discordTimestamp(deadline, 'R')}）`,
-        `奖池：**${formatCoins(pool)}**`,
+        `奖池：**${formatCoins(pool, prediction.guild_id)}**`,
         '',
         optionLines,
       ].join('\n'),
     )
-    .setFooter({ text: `Prediction #${prediction.id} · ${config.currencyName}` });
+    .setFooter({ text: `Prediction #${prediction.id} · ${settings.currencyName}` });
 
   return embed;
 }
@@ -80,7 +81,13 @@ export function buildPredictionButtons(prediction: PredictionRow): ActionRowBuil
   return [row];
 }
 
-export function buildBetModal(predictionId: number, optionIndex: number, optionLabel: string): ModalBuilder {
+export function buildBetModal(
+  predictionId: number,
+  optionIndex: number,
+  optionLabel: string,
+  guildId: string,
+): ModalBuilder {
+  const settings = getGuildSettings(guildId);
   return new ModalBuilder()
     .setCustomId(`betmodal:${predictionId}:${optionIndex}`)
     .setTitle(`下注：${optionLabel}`.slice(0, 45))
@@ -88,7 +95,7 @@ export function buildBetModal(predictionId: number, optionIndex: number, optionL
       new ActionRowBuilder<TextInputBuilder>().addComponents(
         new TextInputBuilder()
           .setCustomId('amount')
-          .setLabel(`金额（${config.currencyName}）`)
+          .setLabel(`金额（${settings.currencyName}）`)
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('例如 300')
           .setRequired(true)

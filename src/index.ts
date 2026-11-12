@@ -7,6 +7,7 @@ import * as daily from './commands/daily.js';
 import * as leaderboard from './commands/leaderboard.js';
 import * as predictionCmd from './commands/prediction.js';
 import * as redpacket from './commands/redpacket.js';
+import * as settings from './commands/settings.js';
 import * as transferCmd from './commands/transfer.js';
 import { config } from './config.js';
 import { closeDb, getDb } from './db/index.js';
@@ -27,6 +28,7 @@ const commandModules: SlashCommand[] = [
   predictionCmd,
   redpacket,
   admin,
+  settings,
 ];
 
 async function refreshClosedPredictionPanels(client: ReturnType<typeof createClient>): Promise<void> {
@@ -106,7 +108,7 @@ async function main(): Promise<void> {
 
   client.once(Events.ClientReady, (readyClient) => {
     console.log(`Logged in as ${readyClient.user.tag}`);
-    console.log(`Currency: ${config.currencyName} · DB: ${config.dbPath}`);
+    console.log(`Default currency: ${config.currencyName} · DB: ${config.dbPath}`);
 
     void refreshClosedPredictionPanels(client);
     void refreshExpiredTransfers(client);

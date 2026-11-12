@@ -1,7 +1,7 @@
-import { config } from '../config.js';
+import { getGuildSettings } from '../services/guildSettings.js';
 
-export function formatCoins(amount: number): string {
-  return `${amount.toLocaleString('en-US')} ${config.currencyName}`;
+export function formatCoins(amount: number, guildId: string): string {
+  return `${amount.toLocaleString('en-US')} ${getGuildSettings(guildId).currencyName}`;
 }
 
 export function parsePositiveInt(raw: string): number | null {

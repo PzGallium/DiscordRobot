@@ -26,7 +26,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   const user = ensureUser(interaction.guildId, interaction.user.id, nickname);
   await interaction.reply({
-    content: `余额：\n**${formatCoins(user.balance)}**`,
+    content: `余额：\n**${formatCoins(user.balance, interaction.guildId)}**`,
     ephemeral: true,
   });
 }

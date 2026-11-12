@@ -64,8 +64,9 @@ npm start
 | `/prediction list` | 全员 | 列出进行中竞猜 |
 | `/redpacket` | 管理员 | 发红包 |
 | `/admin addmoney` | 管理员 | 测试加减余额 |
+| `/settings` | 管理员 / Bot Owner | 查看或修改当前服务器的经济参数 |
 
-管理员 = 拥有 Discord `Administrator` 或 `Manage Server` 权限。
+管理员 = 拥有 Discord `Administrator` 或 `Manage Server` 权限。`.env` 中的 `BOT_OWNER_IDS` 也可在 Bot 已安装的任意服务器中执行管理命令。
 
 ## 竞猜怎么玩
 
@@ -82,7 +83,16 @@ npm start
 - 竞猜手续费：严格 5%（取整余数按下注额从高到低分给赢家）
 - 红包有效期：24 小时（未领取余额自动退回发放者）
 
-可在 `.env` 中覆盖，见 `.env.example`。
+可在 `.env` 中覆盖全局默认值，见 `.env.example`。未单独配置的服务器自动使用这些默认值。
+
+服务器管理员或 Bot Owner 可用 `/settings` 为当前服务器单独设置：币名、新用户初始余额、daily 奖励、竞猜手续费、转账手续费和红包过期时间。各服务器互不影响：
+
+- 修改币名只改变显示，不清空余额
+- 初始余额只影响之后首次使用 Bot 的新用户
+- daily 奖励从下一次签到开始生效
+- 竞猜和转账手续费只影响新创建的竞猜或转账，旧记录继续使用创建时的费率
+- 红包过期时间只影响新红包
+- `/settings reset` 可恢复使用 `.env` 默认值
 
 ## 数据
 

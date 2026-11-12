@@ -36,7 +36,7 @@ export async function handleRedPacketButton(interaction: ButtonInteraction): Pro
     });
 
     await interaction.followUp({
-      content: `你领到了 **${formatCoins(result.amount)}**！余额：${formatCoins(result.user.balance)}`,
+      content: `你领到了 **${formatCoins(result.amount, result.packet.guild_id)}**！余额：${formatCoins(result.user.balance, result.packet.guild_id)}`,
       ephemeral: true,
     });
   } catch (err) {

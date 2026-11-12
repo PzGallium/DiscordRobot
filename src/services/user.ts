@@ -1,6 +1,6 @@
-import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { toSqliteDatetime } from '../utils/time.js';
+import { getGuildSettings } from './guildSettings.js';
 
 export type UserRow = {
   id: number;
@@ -29,13 +29,14 @@ export function ensureUser(guildId: string, discordId: string, nickname: string)
     return existing;
   }
 
+  const settings = getGuildSettings(guildId);
   const createdAt = toSqliteDatetime();
   const result = db
     .prepare(
       `INSERT INTO users (guild_id, discord_id, nickname, balance, created_at)
        VALUES (?, ?, ?, ?, ?)`,
     )
-    .run(guildId, discordId, nickname || 'Unknown', config.startingBalance, createdAt);
+    .run(guildId, discordId, nickname || 'Unknown', settings.startingBalance, createdAt);
 
   const userId = Number(result.lastInsertRowid);
 
@@ -45,9 +46,9 @@ export function ensureUser(guildId: string, discordId: string, nickname: string)
   ).run(
     guildId,
     userId,
-    config.startingBalance,
-    config.startingBalance,
-    `Welcome bonus: ${config.startingBalance} ${config.currencyName}`,
+    settings.startingBalance,
+    settings.startingBalance,
+    `Welcome bonus: ${settings.startingBalance} ${settings.currencyName}`,
   );
 
   return {
@@ -55,7 +56,7 @@ export function ensureUser(guildId: string, discordId: string, nickname: string)
     guild_id: guildId,
     discord_id: discordId,
     nickname: nickname || 'Unknown',
-    balance: config.startingBalance,
+    balance: settings.startingBalance,
     last_daily_at: null,
     created_at: createdAt,
   };

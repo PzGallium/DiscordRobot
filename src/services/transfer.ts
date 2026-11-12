@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { toSqliteDatetime } from '../utils/time.js';
 import { applyDelta, EconomyError, withTransaction } from './economy.js';
+import { getGuildSettings } from './guildSettings.js';
 import { ensureUser, getUserById, type UserRow } from './user.js';
 
 export type TransferStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
@@ -13,6 +14,7 @@ export type TransferRow = {
   to_user_id: number;
   amount: number;
   fee: number;
+  fee_bps: number;
   status: TransferStatus;
   channel_id: string | null;
   message_id: string | null;
@@ -20,8 +22,8 @@ export type TransferRow = {
   expires_at: string;
 };
 
-export function calcTransferFee(amount: number): number {
-  return Math.floor((amount * config.transferFeeBps) / 10000);
+export function calcTransferFee(amount: number, feeBps: number): number {
+  return Math.floor((amount * feeBps) / 10000);
 }
 
 export function createTransfer(input: {
@@ -40,7 +42,8 @@ export function createTransfer(input: {
     throw new EconomyError('Cannot transfer to yourself');
   }
 
-  const fee = calcTransferFee(input.amount);
+  const settings = getGuildSettings(input.guildId);
+  const fee = calcTransferFee(input.amount, settings.transferFeeBps);
   const totalDebit = input.amount + fee;
 
   return withTransaction((db) => {
@@ -60,8 +63,8 @@ export function createTransfer(input: {
     const result = db
       .prepare(
         `INSERT INTO transfers
-         (guild_id, from_user_id, to_user_id, amount, fee, status, channel_id, expires_at)
-         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
+         (guild_id, from_user_id, to_user_id, amount, fee, fee_bps, status, channel_id, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
       )
       .run(
         input.guildId,
@@ -69,6 +72,7 @@ export function createTransfer(input: {
         to.id,
         input.amount,
         fee,
+        settings.transferFeeBps,
         input.channelId,
         toSqliteDatetime(expiresAt),
       );

@@ -1,7 +1,7 @@
-import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { fromSqliteDatetime, toSqliteDatetime } from '../utils/time.js';
 import { applyDelta, EconomyError, withTransaction } from './economy.js';
+import { getGuildSettings } from './guildSettings.js';
 import { ensureUser, getUserById, type UserRow } from './user.js';
 
 export type PredictionStatus = 'open' | 'closed' | 'settled';
@@ -92,6 +92,7 @@ export function createPrediction(input: {
   }
 
   const db = getDb();
+  const settings = getGuildSettings(input.guildId);
   const result = db
     .prepare(
       `INSERT INTO predictions
@@ -104,7 +105,7 @@ export function createPrediction(input: {
       JSON.stringify(input.options),
       toSqliteDatetime(input.deadline),
       input.createdBy,
-      config.predictionFeeBps,
+      settings.predictionFeeBps,
       input.channelId,
     );
 

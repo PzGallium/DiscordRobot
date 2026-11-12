@@ -22,7 +22,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  const entries = getLeaderboard(interaction.guildId, 10);
+  const guildId = interaction.guildId;
+  const entries = getLeaderboard(guildId, 10);
   if (entries.length === 0) {
     await interaction.reply({ content: '暂无排行数据。先 `/daily` 或互动一次吧！', ephemeral: true });
     return;
@@ -30,7 +31,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   const lines = entries.map((e) => {
     const medal = MEDALS[e.rank - 1] ?? `${e.rank}.`;
-    return `${medal} <@${e.discord_id}> — **${formatCoins(e.balance)}**`;
+    return `${medal} <@${e.discord_id}> — **${formatCoins(e.balance, guildId)}**`;
   });
 
   const embed = new EmbedBuilder()

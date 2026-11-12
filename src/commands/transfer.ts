@@ -59,7 +59,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     setTransferMessage(transfer.id, reply.id);
 
     await interaction.followUp({
-      content: `已发起转账。已预扣 ${formatCoins(totalDebit)}（含手续费）。`,
+      content: `已发起转账。已预扣 ${formatCoins(totalDebit, interaction.guildId)}（含手续费）。`,
       ephemeral: true,
     });
   } catch (err) {

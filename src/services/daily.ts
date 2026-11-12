@@ -1,6 +1,6 @@
-import { config } from '../config.js';
 import { calendarDateInTimezone } from '../utils/time.js';
 import { applyDelta, withTransaction } from './economy.js';
+import { getGuildSettings } from './guildSettings.js';
 import { ensureUser, type UserRow } from './user.js';
 
 export type DailyResult =
@@ -10,6 +10,7 @@ export type DailyResult =
 export function claimDaily(guildId: string, discordId: string, nickname: string): DailyResult {
   return withTransaction((db) => {
     const user = ensureUser(guildId, discordId, nickname);
+    const settings = getGuildSettings(guildId);
     const today = calendarDateInTimezone();
 
     if (user.last_daily_at === today) {
@@ -20,16 +21,16 @@ export function claimDaily(guildId: string, discordId: string, nickname: string)
       db,
       guildId,
       userId: user.id,
-      delta: config.dailyReward,
+      delta: settings.dailyReward,
       type: 'daily',
-      description: `Daily check-in +${config.dailyReward}`,
+      description: `Daily check-in +${settings.dailyReward}`,
     });
 
     db.prepare(`UPDATE users SET last_daily_at = ? WHERE id = ?`).run(today, user.id);
 
     return {
       ok: true,
-      reward: config.dailyReward,
+      reward: settings.dailyReward,
       balance: balanceAfter!,
       user: { ...updated!, last_daily_at: today },
     };

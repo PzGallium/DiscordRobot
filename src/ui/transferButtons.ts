@@ -1,5 +1,4 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
-import { config } from '../config.js';
 import type { TransferRow } from '../services/transfer.js';
 import type { UserRow } from '../services/user.js';
 import { formatCoins } from '../utils/format.js';
@@ -19,9 +18,9 @@ export function buildTransferEmbed(input: {
     .setDescription(
       [
         `<@${from.discord_id}> → <@${to.discord_id}>`,
-        `到账：**${formatCoins(transfer.amount)}**`,
-        `手续费：**${formatCoins(transfer.fee)}**（${(config.transferFeeBps / 100).toFixed(1)}%）`,
-        `转出合计：**${formatCoins(total)}**`,
+        `到账：**${formatCoins(transfer.amount, transfer.guild_id)}**`,
+        `手续费：**${formatCoins(transfer.fee, transfer.guild_id)}**（${(transfer.fee_bps / 100).toFixed(1)}%）`,
+        `转出合计：**${formatCoins(total, transfer.guild_id)}**`,
         statusNote ? `\n${statusNote}` : '收款人请点击下方按钮确认或拒绝。',
       ].join('\n'),
     )

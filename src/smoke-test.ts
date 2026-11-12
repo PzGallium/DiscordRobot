@@ -23,6 +23,9 @@ for (const f of [dbFile, `${dbFile}-wal`, `${dbFile}-shm`]) {
 const { closeDb } = await import('./db/index.js');
 const { ensureUser } = await import('./services/user.js');
 const { claimDaily } = await import('./services/daily.js');
+const { getGuildSettings, resetGuildSettings, updateGuildSettings } = await import(
+  './services/guildSettings.js'
+);
 const { getLeaderboard } = await import('./services/leaderboard.js');
 const {
   createPrediction,
@@ -36,6 +39,8 @@ const { createRedPacket, claimRedPacket, expireOpenRedPackets } = await import(
   './services/redpacket.js'
 );
 const { applyDelta, getBalance, withTransaction } = await import('./services/economy.js');
+const { formatCoins } = await import('./utils/format.js');
+const { fromSqliteDatetime } = await import('./utils/time.js');
 
 const guild = 'guild1';
 
@@ -184,6 +189,71 @@ console.assert(
 
 const board = getLeaderboard(guild, 10);
 console.assert(board.length >= 2, 'leaderboard');
+
+const customGuild = 'guild2';
+const custom = updateGuildSettings(
+  customGuild,
+  {
+    currencyName: 'Gold',
+    startingBalance: 2500,
+    dailyReward: 275,
+    transferFeeBps: 750,
+    predictionFeeBps: 1250,
+    redPacketExpireMs: 2 * 60 * 60 * 1000,
+  },
+  'owner',
+);
+console.assert(custom.customized, 'guild settings customized');
+console.assert(getGuildSettings(guild).currencyName !== 'Gold', 'guild settings isolated');
+console.assert(formatCoins(25, customGuild) === '25 Gold', 'custom currency display');
+
+const eve = ensureUser(customGuild, 'eve', 'Eve');
+console.assert(eve.balance === 2500, 'custom starting balance');
+const customDaily = claimDaily(customGuild, 'eve', 'Eve');
+console.assert(customDaily.ok && customDaily.reward === 275, 'custom daily reward');
+
+const customPrediction = createPrediction({
+  guildId: customGuild,
+  title: 'Custom fee',
+  options: ['A', 'B'],
+  deadline,
+  createdBy: 'owner',
+  channelId: 'ch2',
+});
+console.assert(customPrediction.fee_bps === 1250, 'custom prediction fee snapshot');
+
+const customTransfer = createTransfer({
+  guildId: customGuild,
+  fromDiscordId: 'eve',
+  fromNickname: 'Eve',
+  toDiscordId: 'frank',
+  toNickname: 'Frank',
+  amount: 100,
+  channelId: 'ch2',
+});
+console.assert(customTransfer.transfer.fee === 7, 'custom transfer fee');
+console.assert(customTransfer.transfer.fee_bps === 750, 'custom transfer fee snapshot');
+
+const customPacketStartedAt = Date.now();
+const { packet: customPacket } = createRedPacket({
+  guildId: customGuild,
+  creatorDiscordId: 'eve',
+  creatorNickname: 'Eve',
+  totalAmount: 50,
+  count: 2,
+  channelId: 'ch2',
+});
+const customPacketLifetime =
+  fromSqliteDatetime(customPacket.expires_at).getTime() - customPacketStartedAt;
+console.assert(
+  customPacketLifetime > 2 * 60 * 60 * 1000 - 2000 &&
+    customPacketLifetime <= 2 * 60 * 60 * 1000,
+  'custom red packet expiry snapshot',
+);
+
+const reset = resetGuildSettings(customGuild);
+console.assert(!reset.customized, 'guild settings reset');
+console.assert(reset.currencyName !== 'Gold', 'reset uses environment defaults');
 
 console.log('Smoke test passed.');
 console.log(

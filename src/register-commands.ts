@@ -7,9 +7,10 @@ import * as daily from './commands/daily.js';
 import * as leaderboard from './commands/leaderboard.js';
 import * as prediction from './commands/prediction.js';
 import * as redpacket from './commands/redpacket.js';
+import * as settings from './commands/settings.js';
 import * as transfer from './commands/transfer.js';
 
-const commands = [daily, balance, leaderboard, transfer, prediction, redpacket, admin];
+const commands = [daily, balance, leaderboard, transfer, prediction, redpacket, admin, settings];
 
 async function main(): Promise<void> {
   const body = commands.map((c) => c.data.toJSON());

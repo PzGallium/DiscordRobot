@@ -14,8 +14,8 @@ export function buildRedPacketEmbed(packet: RedPacketRow, creator: UserRow): Emb
     .setDescription(
       [
         `来自：<@${creator.discord_id}>`,
-        `总额：**${formatCoins(packet.total_amount)}**`,
-        `剩余：${packet.remaining_count}/${packet.count} 个 · ${formatCoins(packet.remaining_amount)}`,
+        `总额：**${formatCoins(packet.total_amount, packet.guild_id)}**`,
+        `剩余：${packet.remaining_count}/${packet.count} 个 · ${formatCoins(packet.remaining_amount, packet.guild_id)}`,
         `过期：<t:${expiresAt}:R>`,
         expired
           ? '\n已过期，未领取余额已退回发放者。'

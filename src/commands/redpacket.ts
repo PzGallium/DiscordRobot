@@ -68,7 +68,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     setRedPacketMessage(packet.id, message.id);
 
     await interaction.reply({
-      content: `红包已发出：${formatCoins(amount)} / ${count} 个。已从你的余额扣除。`,
+      content: `红包已发出：${formatCoins(amount, interaction.guildId)} / ${count} 个。已从你的余额扣除。`,
       ephemeral: true,
     });
   } catch (err) {

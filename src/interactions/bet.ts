@@ -39,7 +39,9 @@ export async function handleBetButton(interaction: ButtonInteraction): Promise<b
     return true;
   }
 
-  await interaction.showModal(buildBetModal(predictionId, optionIndex, option));
+  await interaction.showModal(
+    buildBetModal(predictionId, optionIndex, option, interaction.guildId),
+  );
   return true;
 }
 
@@ -90,7 +92,7 @@ export async function handleBetModal(interaction: ModalSubmitInteraction): Promi
     });
 
     await interaction.reply({
-      content: `下注成功！\n**${result.option}** · ${formatCoins(result.amount)}\n余额：${formatCoins(result.balance)}`,
+      content: `下注成功！\n**${result.option}** · ${formatCoins(result.amount, interaction.guildId)}\n余额：${formatCoins(result.balance, interaction.guildId)}`,
       ephemeral: true,
     });
 

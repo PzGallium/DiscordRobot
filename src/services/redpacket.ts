@@ -1,7 +1,7 @@
-import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { fromSqliteDatetime, toSqliteDatetime } from '../utils/time.js';
 import { applyDelta, EconomyError, withTransaction } from './economy.js';
+import { getGuildSettings } from './guildSettings.js';
 import { ensureUser, getUserById, type UserRow } from './user.js';
 
 export type RedPacketStatus = 'open' | 'closed' | 'expired';
@@ -55,7 +55,8 @@ export function createRedPacket(input: {
 
   return withTransaction((db) => {
     const creator = ensureUser(input.guildId, input.creatorDiscordId, input.creatorNickname);
-    const expiresAt = new Date(Date.now() + config.redPacketExpireMs);
+    const settings = getGuildSettings(input.guildId);
+    const expiresAt = new Date(Date.now() + settings.redPacketExpireMs);
 
     applyDelta({
       db,

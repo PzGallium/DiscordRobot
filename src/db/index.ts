@@ -24,6 +24,10 @@ export function getDb(): Database.Database {
   if (!redPacketColumns.some((column) => column.name === 'expires_at')) {
     db.exec(`ALTER TABLE red_packets ADD COLUMN expires_at TEXT`);
   }
+  const transferColumns = db.pragma('table_info(transfers)') as Array<{ name: string }>;
+  if (!transferColumns.some((column) => column.name === 'fee_bps')) {
+    db.exec(`ALTER TABLE transfers ADD COLUMN fee_bps INTEGER`);
+  }
   db.exec(`
     UPDATE red_packets
     SET expires_at = datetime(created_at, '+24 hours')
@@ -31,6 +35,7 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_red_packets_expiry
     ON red_packets(status, expires_at);
   `);
+  db.prepare(`UPDATE transfers SET fee_bps = ? WHERE fee_bps IS NULL`).run(config.transferFeeBps);
 
   return db;
 }

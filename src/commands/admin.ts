@@ -58,7 +58,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     });
 
     await interaction.reply({
-      content: `已调整 <@${target.id}>：${amount >= 0 ? '+' : ''}${formatCoins(amount)}\n余额：${formatCoins(result.balanceAfter!)}`,
+      content: `已调整 <@${target.id}>：${amount >= 0 ? '+' : ''}${formatCoins(amount, interaction.guildId)}\n余额：${formatCoins(result.balanceAfter!, interaction.guildId)}`,
       ephemeral: true,
     });
   } catch (err) {

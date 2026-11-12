@@ -46,7 +46,7 @@ export function buildSettleChoiceEmbed(prediction: PredictionRow): EmbedBuilder 
   const pool = getPoolTotal(prediction.id);
 
   const optionLines = options
-    .map((opt, i) => `${OPTION_EMOJIS[i] ?? '⚪'} **${opt}**：${formatCoins(totals[opt] ?? 0)}`)
+    .map((opt, i) => `${OPTION_EMOJIS[i] ?? '⚪'} **${opt}**：${formatCoins(totals[opt] ?? 0, prediction.guild_id)}`)
     .join('\n');
 
   return new EmbedBuilder()
@@ -55,7 +55,7 @@ export function buildSettleChoiceEmbed(prediction: PredictionRow): EmbedBuilder 
     .setDescription(
       [
         `**${prediction.title}**`,
-        `状态：${prediction.status} · 奖池 **${formatCoins(pool)}**`,
+        `状态：${prediction.status} · 奖池 **${formatCoins(pool, prediction.guild_id)}**`,
         '',
         '点击下方按钮选择获胜选项，或点「取消并退款」。',
         '',

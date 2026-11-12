@@ -13,7 +13,7 @@ export function buildSettleAnnouncementEmbed(result: SettleResult): EmbedBuilder
   const optionLines = options.map((opt) => {
     const total = result.optionTotals[opt] ?? 0;
     const mark = !cancelled && opt === result.winnerOption ? ' ✅' : '';
-    return `• **${opt}**：${formatCoins(total)}${mark}`;
+    return `• **${opt}**：${formatCoins(total, prediction.guild_id)}${mark}`;
   });
 
   if (cancelled) {
@@ -22,7 +22,7 @@ export function buildSettleAnnouncementEmbed(result: SettleResult): EmbedBuilder
         ? ['（无人下注）']
         : result.winners.map(
             (w, i) =>
-              `${i + 1}. <@${w.discordId}>（${w.nickname}）押 **${w.option}** · ${formatCoins(w.bet)} → 已退回 **${formatCoins(w.payout)}**`,
+              `${i + 1}. <@${w.discordId}>（${w.nickname}）押 **${w.option}** · ${formatCoins(w.bet, prediction.guild_id)} → 已退回 **${formatCoins(w.payout, prediction.guild_id)}**`,
           );
 
     const description = [
@@ -34,7 +34,7 @@ export function buildSettleAnnouncementEmbed(result: SettleResult): EmbedBuilder
       ...optionLines,
       '',
       '**结果**：已取消（无人猜中 / 主动退款）',
-      `**奖池**：${formatCoins(result.pool)}（已全额退回）`,
+      `**奖池**：${formatCoins(result.pool, prediction.guild_id)}（已全额退回）`,
       '',
       '**退款名单**',
       ...refundLines,
@@ -52,7 +52,7 @@ export function buildSettleAnnouncementEmbed(result: SettleResult): EmbedBuilder
       ? ['（无人押中获胜选项）']
       : result.winners.map(
           (w, i) =>
-            `${i + 1}. <@${w.discordId}>（${w.nickname}）押 **${formatCoins(w.bet)}** → 获得 **${formatCoins(w.payout)}**`,
+            `${i + 1}. <@${w.discordId}>（${w.nickname}）押 **${formatCoins(w.bet, prediction.guild_id)}** → 获得 **${formatCoins(w.payout, prediction.guild_id)}**`,
         );
 
   const loserLines =
@@ -63,7 +63,7 @@ export function buildSettleAnnouncementEmbed(result: SettleResult): EmbedBuilder
           '**未中奖**',
           ...result.losers.map(
             (w) =>
-              `• <@${w.discordId}>（${w.nickname}）押 **${w.option}** · ${formatCoins(w.bet)} → 0`,
+              `• <@${w.discordId}>（${w.nickname}）押 **${w.option}** · ${formatCoins(w.bet, prediction.guild_id)} → 0`,
           ),
         ];
 
@@ -76,7 +76,7 @@ export function buildSettleAnnouncementEmbed(result: SettleResult): EmbedBuilder
     ...optionLines,
     '',
     `**开奖结果**：${result.winnerOption}`,
-    `**奖池**：${formatCoins(result.pool)}`,
+    `**奖池**：${formatCoins(result.pool, prediction.guild_id)}`,
     '',
     '**获奖名单**',
     ...winnerLines,

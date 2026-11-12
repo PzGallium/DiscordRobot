@@ -10,6 +10,18 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE (guild_id, discord_id)
 );
 
+CREATE TABLE IF NOT EXISTS guild_settings (
+  guild_id TEXT PRIMARY KEY,
+  currency_name TEXT NOT NULL,
+  starting_balance INTEGER NOT NULL,
+  daily_reward INTEGER NOT NULL,
+  transfer_fee_bps INTEGER NOT NULL,
+  prediction_fee_bps INTEGER NOT NULL,
+  redpacket_expire_ms INTEGER NOT NULL,
+  updated_by TEXT,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS predictions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   guild_id TEXT NOT NULL,
@@ -56,6 +68,7 @@ CREATE TABLE IF NOT EXISTS transfers (
   to_user_id INTEGER NOT NULL,
   amount INTEGER NOT NULL,
   fee INTEGER NOT NULL,
+  fee_bps INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   channel_id TEXT,
   message_id TEXT,
